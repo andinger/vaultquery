@@ -579,6 +579,201 @@ func TestParseFromGrouped(t *testing.T) {
 	}
 }
 
+func TestParseFunctionCallInTableField(t *testing.T) {
+	q, err := Parse(`TABLE dateformat(file.mtime, "dd.MM.yyyy") AS "Modified"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(q.Fields))
+	}
+	fc, ok := q.Fields[0].Expr.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr, got %T", q.Fields[0].Expr)
+	}
+	if fc.Name != "dateformat" {
+		t.Errorf("expected function name 'dateformat', got %q", fc.Name)
+	}
+	if len(fc.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(fc.Args))
+	}
+	if q.Fields[0].Alias != "Modified" {
+		t.Errorf("expected alias 'Modified', got %q", q.Fields[0].Alias)
+	}
+	names := FieldDefNames(q.Fields)
+	if names[0] != "Modified" {
+		t.Errorf("expected display name 'Modified', got %q", names[0])
+	}
+}
+
+func TestParseRegexreplaceInTableField(t *testing.T) {
+	q, err := Parse(`TABLE WITHOUT ID regexreplace(file.folder, ".*/", "") AS "Titel", status`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !q.WithoutID {
+		t.Error("expected WithoutID=true")
+	}
+	if len(q.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(q.Fields))
+	}
+	fc, ok := q.Fields[0].Expr.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr for first field, got %T", q.Fields[0].Expr)
+	}
+	if fc.Name != "regexreplace" {
+		t.Errorf("expected 'regexreplace', got %q", fc.Name)
+	}
+	if len(fc.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(fc.Args))
+	}
+	names := FieldDefNames(q.Fields)
+	if names[0] != "Titel" || names[1] != "status" {
+		t.Errorf("unexpected names: %v", names)
+	}
+}
+
+func TestParseChoiceWithComparisonInTableField(t *testing.T) {
+	q, err := Parse(`TABLE choice(status = "red", "Bad", choice(status = "yellow", "Warning", "Good")) AS "Health"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(q.Fields))
+	}
+	fc, ok := q.Fields[0].Expr.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr, got %T", q.Fields[0].Expr)
+	}
+	if fc.Name != "choice" {
+		t.Errorf("expected 'choice', got %q", fc.Name)
+	}
+	if len(fc.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(fc.Args))
+	}
+	// First arg should be a comparison: status = "red"
+	cmp, ok := fc.Args[0].(ComparisonExpr)
+	if !ok {
+		t.Fatalf("expected ComparisonExpr as first arg, got %T", fc.Args[0])
+	}
+	if cmp.Field != "status" || cmp.Op != "=" || cmp.Value != "red" {
+		t.Errorf("unexpected comparison: %+v", cmp)
+	}
+	// Third arg should be a nested choice()
+	innerFc, ok := fc.Args[2].(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected nested FunctionCallExpr, got %T", fc.Args[2])
+	}
+	if innerFc.Name != "choice" {
+		t.Errorf("expected nested 'choice', got %q", innerFc.Name)
+	}
+}
+
+func TestParseNegatedContainsInWhere(t *testing.T) {
+	q, err := Parse(`LIST WHERE type = "Initiative" AND !contains(file.path, "_Archiv")`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	logic, ok := q.Where.(LogicalExpr)
+	if !ok {
+		t.Fatalf("expected LogicalExpr, got %T", q.Where)
+	}
+	neg, ok := logic.Right.(NegationExpr)
+	if !ok {
+		t.Fatalf("expected NegationExpr on right, got %T", logic.Right)
+	}
+	fc, ok := neg.Inner.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr inside negation, got %T", neg.Inner)
+	}
+	if fc.Name != "contains" {
+		t.Errorf("expected 'contains', got %q", fc.Name)
+	}
+	if len(fc.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(fc.Args))
+	}
+}
+
+func TestParseContainsFunctionCallInWhere(t *testing.T) {
+	q, err := Parse(`LIST WHERE contains(file.folder, "Clients")`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	fc, ok := q.Where.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr, got %T", q.Where)
+	}
+	if fc.Name != "contains" {
+		t.Errorf("expected 'contains', got %q", fc.Name)
+	}
+	if len(fc.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(fc.Args))
+	}
+}
+
+func TestParseSortWithExpression(t *testing.T) {
+	q, err := Parse(`LIST SORT choice(status = "red", 1, choice(status = "yellow", 2, 3)) ASC`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Sort) != 1 {
+		t.Fatalf("expected 1 sort field, got %d", len(q.Sort))
+	}
+	if q.Sort[0].Desc {
+		t.Error("expected ASC sort")
+	}
+	fc, ok := q.Sort[0].Expr.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr in sort, got %T", q.Sort[0].Expr)
+	}
+	if fc.Name != "choice" {
+		t.Errorf("expected 'choice', got %q", fc.Name)
+	}
+}
+
+func TestParseArithmeticInTableField(t *testing.T) {
+	q, err := Parse(`TABLE open_issues + critical_issues AS "Total"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(q.Fields))
+	}
+	ae, ok := q.Fields[0].Expr.(ArithmeticExpr)
+	if !ok {
+		t.Fatalf("expected ArithmeticExpr, got %T", q.Fields[0].Expr)
+	}
+	if ae.Op != "+" {
+		t.Errorf("expected '+', got %q", ae.Op)
+	}
+}
+
+func TestParseComplexQueryWithAllClauses(t *testing.T) {
+	q, err := Parse(`TABLE WITHOUT ID
+		regexreplace(file.folder, ".*/", "") AS "Titel",
+		urgency AS "Priority",
+		file.link AS "Link"
+		FROM "Clients/Acme Corp"
+		WHERE type = "Initiative" AND project = "Alpha" AND !contains(file.path, "_Archiv")
+		SORT urgency ASC`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !q.WithoutID {
+		t.Error("expected WithoutID=true")
+	}
+	if len(q.Fields) != 3 {
+		t.Fatalf("expected 3 fields, got %d", len(q.Fields))
+	}
+	names := FieldDefNames(q.Fields)
+	if names[0] != "Titel" || names[1] != "Priority" || names[2] != "Link" {
+		t.Errorf("unexpected field names: %v", names)
+	}
+	if q.From != "Clients/Acme Corp" {
+		t.Errorf("expected FROM 'Clients/Acme Corp', got %q", q.From)
+	}
+}
+
 func TestParseWhereWithBoolLiterals(t *testing.T) {
 	q, err := Parse("LIST WHERE completed = true")
 	if err != nil {

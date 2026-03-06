@@ -53,8 +53,35 @@ func (e *Executor) Execute(query *dql.Query) (*Result, error) {
 }
 
 // executePushDown handles queries where everything can be done in SQL (backward compat path).
+// hasExprSort returns true if any sort field uses an expression rather than a simple field name.
+func hasExprSort(sorts []dql.SortField) bool {
+	for _, sf := range sorts {
+		if sf.Field == "" && sf.Expr != nil {
+			if _, ok := sf.Expr.(dql.FieldAccessExpr); !ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (e *Executor) executePushDown(query *dql.Query) (*Result, error) {
-	sqlStr, args, err := GenerateSQL(query)
+	// If sort uses expressions, strip sort from SQL and handle in Go
+	sqlQuery := query
+	exprSort := hasExprSort(query.Sort)
+	if exprSort {
+		sqlQuery = &dql.Query{
+			Mode:       query.Mode,
+			Fields:     query.Fields,
+			From:       query.From,
+			FromSource: query.FromSource,
+			Where:      query.Where,
+			Limit:      0, // apply after Go sort
+			WithoutID:  query.WithoutID,
+		}
+	}
+
+	sqlStr, args, err := GenerateSQL(sqlQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +104,14 @@ func (e *Executor) executePushDown(query *dql.Query) (*Result, error) {
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+
+	// Apply Go-side sort for expression-based SORT
+	if exprSort {
+		e.sortRows(db, files, query.Sort)
+		if query.Limit > 0 && len(files) > query.Limit {
+			files = files[:query.Limit]
+		}
 	}
 
 	result := &Result{
@@ -203,7 +238,11 @@ func (e *Executor) executeHybrid(query *dql.Query) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		ctx := eval.BuildEvalContextFromEAV(f.path, f.title, fields)
+		meta, err := queryFileMeta(db, f.id)
+		if err != nil {
+			return nil, err
+		}
+		ctx := e.buildEvalContext(db, f, fields, meta)
 
 		if query.Where == nil || e.eval.EvalBool(query.Where, ctx) {
 			filtered = append(filtered, f)
@@ -402,11 +441,18 @@ func queryFieldValues(db *sql.DB, fileID int64, key string) ([]string, error) {
 	return values, rows.Err()
 }
 
-// isSimpleFieldDef returns true if the FieldDef is a plain field access (e.g. "customer" or "file.name"),
-// not a function call, arithmetic, etc.
+// isSimpleFieldDef returns true if the FieldDef is a plain EAV field access (e.g. "customer"),
+// not a function call, arithmetic, or file.* implicit field.
 func isSimpleFieldDef(fd dql.FieldDef) bool {
-	_, ok := fd.Expr.(dql.FieldAccessExpr)
-	return ok
+	fa, ok := fd.Expr.(dql.FieldAccessExpr)
+	if !ok {
+		return false
+	}
+	// file.* fields are not in EAV — they need expression evaluation
+	if len(fa.Parts) > 0 && fa.Parts[0] == "file" {
+		return false
+	}
+	return true
 }
 
 // needsExprEval returns true if any TABLE field requires Go-side expression evaluation.
