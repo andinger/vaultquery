@@ -1,11 +1,14 @@
 package indexer
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/andinger/vaultquery/internal/index"
 )
+
+var nopLogger = slog.New(slog.DiscardHandler)
 
 const testRoot = "/vault"
 
@@ -40,7 +43,7 @@ func TestInitialIndex(t *testing.T) {
 	mfs.AddFile(testRoot+"/clusters/acme.md", testContent(), testTime)
 	mfs.AddFile(testRoot+"/clusters/beta.md", []byte("# Beta Cluster\n"), testTime.Add(time.Hour))
 
-	idx := New(store, mfs)
+	idx := New(store, mfs, nopLogger)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +83,7 @@ func TestIncrementalAdd(t *testing.T) {
 	mfs := NewMemFS()
 	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
 
-	idx := New(store, mfs)
+	idx := New(store, mfs, nopLogger)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +105,7 @@ func TestIncrementalChange(t *testing.T) {
 	mfs := NewMemFS()
 	mfs.AddFile(testRoot+"/a.md", []byte("# Original\n"), testTime)
 
-	idx := New(store, mfs)
+	idx := New(store, mfs, nopLogger)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +135,7 @@ func TestIncrementalDelete(t *testing.T) {
 	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
 	mfs.AddFile(testRoot+"/b.md", []byte("# B\n"), testTime)
 
-	idx := New(store, mfs)
+	idx := New(store, mfs, nopLogger)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +160,7 @@ func TestNoChanges(t *testing.T) {
 	mfs := NewMemFS()
 	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
 
-	idx := New(store, mfs)
+	idx := New(store, mfs, nopLogger)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}

@@ -42,8 +42,9 @@ func ensureIndex(cmd *cobra.Command) (*index.Store, error) {
 		return nil, fmt.Errorf("opening index: %w", err)
 	}
 
+	log := newLogger(cmd)
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs)
+	idx := indexer.New(store, fs, log)
 	if err := idx.Update(vaultRoot); err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("updating index: %w", err)
@@ -156,8 +157,9 @@ func runReindex(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("dropping index: %w", err)
 	}
 
+	log := newLogger(cmd)
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs)
+	idx := indexer.New(store, fs, log)
 	start := time.Now()
 	if err := idx.Update(vaultRoot); err != nil {
 		return fmt.Errorf("reindexing: %w", err)

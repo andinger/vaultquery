@@ -2,6 +2,7 @@ package internal_test
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -93,7 +94,7 @@ func setupTestVault(t *testing.T) (*testVault, *index.Store) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs)
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler))
 	if err := idx.Update(vault.root); err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +270,7 @@ func TestIntegration_IncrementalUpdate(t *testing.T) {
 	}, "# Initech Cluster\n")
 
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs)
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler))
 	if err := idx.Update(vault.root); err != nil {
 		t.Fatal(err)
 	}

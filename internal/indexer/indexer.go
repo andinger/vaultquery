@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 	"strings"
 
@@ -17,11 +18,12 @@ type fsInfo struct {
 type Indexer struct {
 	store *index.Store
 	fs    FS
+	log   *slog.Logger
 }
 
 // New creates a new Indexer.
-func New(store *index.Store, fs FS) *Indexer {
-	return &Indexer{store: store, fs: fs}
+func New(store *index.Store, fs FS, log *slog.Logger) *Indexer {
+	return &Indexer{store: store, fs: fs, log: log}
 }
 
 // Update scans the vault at root and synchronises the index.
@@ -63,6 +65,8 @@ func (idx *Indexer) Update(root string) error {
 		indexMap[f.Path] = f
 	}
 
+	idx.log.Info("scan complete", "files_found", len(fsFiles), "files_indexed", len(indexed))
+
 	// 3. Compute delta
 	var toDelete []string
 	var toUpsert []string
@@ -83,6 +87,8 @@ func (idx *Indexer) Update(root string) error {
 		}
 	}
 
+	idx.log.Info("changes detected", "to_upsert", len(toUpsert), "to_delete", len(toDelete))
+
 	// 4. Begin transaction
 	tx, err := idx.store.BeginTx()
 	if err != nil {
@@ -98,6 +104,7 @@ func (idx *Indexer) Update(root string) error {
 	}
 
 	// 6. Upsert new/changed files
+	var skipped int
 	for _, rel := range toUpsert {
 		absPath := filepath.Join(root, rel)
 		data, err := idx.fs.ReadFile(absPath)
@@ -106,7 +113,9 @@ func (idx *Indexer) Update(root string) error {
 		}
 		fields, title, err := ParseFrontmatter(data)
 		if err != nil {
-			return err
+			idx.log.Warn("skipping file with invalid frontmatter", "file", rel, "error", err)
+			skipped++
+			continue
 		}
 		fi := fsFiles[rel]
 		fileID, err := idx.store.UpsertFileTx(tx, rel, fi.mtime, fi.size, title)
@@ -116,6 +125,9 @@ func (idx *Indexer) Update(root string) error {
 		if err := idx.store.SetFieldsTx(tx, fileID, fields); err != nil {
 			return err
 		}
+	}
+	if skipped > 0 {
+		idx.log.Warn("some files were skipped due to invalid frontmatter", "skipped", skipped)
 	}
 
 	// 7. Set vault root metadata
