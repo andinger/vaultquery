@@ -12,8 +12,9 @@ func TestParseFullTableQuery(t *testing.T) {
 	if q.Mode != "TABLE" {
 		t.Errorf("expected TABLE, got %s", q.Mode)
 	}
-	if len(q.Fields) != 2 || q.Fields[0] != "customer" || q.Fields[1] != "kubectl_context" {
-		t.Errorf("unexpected fields: %v", q.Fields)
+	names := FieldDefNames(q.Fields)
+	if len(names) != 2 || names[0] != "customer" || names[1] != "kubectl_context" {
+		t.Errorf("unexpected fields: %v", names)
 	}
 	if q.From != "Clients" {
 		t.Errorf("expected From 'Clients', got %q", q.From)
@@ -85,8 +86,9 @@ func TestParseTableNoFrom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if q.Mode != "TABLE" || len(q.Fields) != 1 || q.Fields[0] != "name" {
-		t.Errorf("unexpected result: %+v", q)
+	names := FieldDefNames(q.Fields)
+	if q.Mode != "TABLE" || len(names) != 1 || names[0] != "name" {
+		t.Errorf("unexpected result: mode=%s fields=%v", q.Mode, names)
 	}
 	if q.From != "" {
 		t.Errorf("expected empty From, got %q", q.From)
@@ -260,8 +262,9 @@ func TestParseGroupBy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(q.GroupBy) != 1 || q.GroupBy[0] != "category" {
-		t.Errorf("unexpected GroupBy: %v", q.GroupBy)
+	names := FieldDefNames(q.GroupBy)
+	if len(names) != 1 || names[0] != "category" {
+		t.Errorf("unexpected GroupBy: %v", names)
 	}
 }
 
@@ -270,8 +273,9 @@ func TestParseFlatten(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(q.Flatten) != 1 || q.Flatten[0] != "tags" {
-		t.Errorf("unexpected Flatten: %v", q.Flatten)
+	names := FieldDefNames(q.Flatten)
+	if len(names) != 1 || names[0] != "tags" {
+		t.Errorf("unexpected Flatten: %v", names)
 	}
 }
 
@@ -337,8 +341,9 @@ func TestParseGroupByMultiple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(q.GroupBy) != 2 || q.GroupBy[0] != "category" || q.GroupBy[1] != "type" {
-		t.Errorf("unexpected GroupBy: %v", q.GroupBy)
+	names := FieldDefNames(q.GroupBy)
+	if len(names) != 2 || names[0] != "category" || names[1] != "type" {
+		t.Errorf("unexpected GroupBy: %v", names)
 	}
 }
 
@@ -347,8 +352,9 @@ func TestParseFlattenMultiple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(q.Flatten) != 2 || q.Flatten[0] != "tags" || q.Flatten[1] != "aliases" {
-		t.Errorf("unexpected Flatten: %v", q.Flatten)
+	names := FieldDefNames(q.Flatten)
+	if len(names) != 2 || names[0] != "tags" || names[1] != "aliases" {
+		t.Errorf("unexpected Flatten: %v", names)
 	}
 }
 
@@ -382,5 +388,207 @@ func TestParseCaseInsensitiveKeywords(t *testing.T) {
 	}
 	if q.Limit != 5 {
 		t.Errorf("expected limit 5, got %d", q.Limit)
+	}
+}
+
+// New tests for Phase 0 additions
+
+func TestParseDottedFieldInWhere(t *testing.T) {
+	q, err := Parse("LIST WHERE file.name = 'test'")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmp, ok := q.Where.(ComparisonExpr)
+	if !ok {
+		t.Fatalf("expected ComparisonExpr, got %T", q.Where)
+	}
+	if cmp.Field != "file.name" {
+		t.Errorf("expected field 'file.name', got %q", cmp.Field)
+	}
+}
+
+func TestParseDottedFieldInTable(t *testing.T) {
+	q, err := Parse("TABLE file.name, file.size")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	names := FieldDefNames(q.Fields)
+	if len(names) != 2 || names[0] != "file.name" || names[1] != "file.size" {
+		t.Errorf("unexpected fields: %v", names)
+	}
+}
+
+func TestParseFieldWithAlias(t *testing.T) {
+	q, err := Parse("TABLE file.name AS name, status")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(q.Fields))
+	}
+	if q.Fields[0].Alias != "name" {
+		t.Errorf("expected alias 'name', got %q", q.Fields[0].Alias)
+	}
+	names := FieldDefNames(q.Fields)
+	if names[0] != "name" || names[1] != "status" {
+		t.Errorf("unexpected names: %v", names)
+	}
+}
+
+func TestParseWithoutID(t *testing.T) {
+	q, err := Parse("TABLE WITHOUT ID name, status")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !q.WithoutID {
+		t.Error("expected WithoutID=true")
+	}
+	names := FieldDefNames(q.Fields)
+	if len(names) != 2 || names[0] != "name" || names[1] != "status" {
+		t.Errorf("unexpected fields: %v", names)
+	}
+}
+
+func TestParseListWithoutID(t *testing.T) {
+	q, err := Parse("LIST WITHOUT ID")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !q.WithoutID {
+		t.Error("expected WithoutID=true")
+	}
+}
+
+func TestParseTaskAndCalendar(t *testing.T) {
+	for _, mode := range []string{"TASK", "CALENDAR"} {
+		t.Run(mode, func(t *testing.T) {
+			q, err := Parse(mode)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if q.Mode != mode {
+				t.Errorf("expected %s, got %s", mode, q.Mode)
+			}
+		})
+	}
+}
+
+func TestParseDottedSort(t *testing.T) {
+	q, err := Parse("LIST SORT file.mtime DESC")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(q.Sort) != 1 || q.Sort[0].Field != "file.mtime" || !q.Sort[0].Desc {
+		t.Errorf("unexpected sort: %v", q.Sort)
+	}
+}
+
+func TestParseFromTag(t *testing.T) {
+	q, err := Parse(`LIST FROM #linux`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ts, ok := q.FromSource.(TagSource)
+	if !ok {
+		t.Fatalf("expected TagSource, got %T", q.FromSource)
+	}
+	if ts.Tag != "linux" {
+		t.Errorf("expected tag 'linux', got %q", ts.Tag)
+	}
+}
+
+func TestParseFromLink(t *testing.T) {
+	q, err := Parse(`LIST FROM [[My Page]]`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ls, ok := q.FromSource.(LinkSource)
+	if !ok {
+		t.Fatalf("expected LinkSource, got %T", q.FromSource)
+	}
+	if ls.Target != "My Page" {
+		t.Errorf("expected target 'My Page', got %q", ls.Target)
+	}
+	if ls.Outgoing {
+		t.Error("expected Outgoing=false")
+	}
+}
+
+func TestParseFromOutgoing(t *testing.T) {
+	q, err := Parse(`LIST FROM outgoing([[Index]])`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ls, ok := q.FromSource.(LinkSource)
+	if !ok {
+		t.Fatalf("expected LinkSource, got %T", q.FromSource)
+	}
+	if ls.Target != "Index" {
+		t.Errorf("expected target 'Index', got %q", ls.Target)
+	}
+	if !ls.Outgoing {
+		t.Error("expected Outgoing=true")
+	}
+}
+
+func TestParseFromBooleanAndOr(t *testing.T) {
+	q, err := Parse(`LIST FROM #linux AND "Clients"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bs, ok := q.FromSource.(BooleanFromSource)
+	if !ok {
+		t.Fatalf("expected BooleanFromSource, got %T", q.FromSource)
+	}
+	if bs.Op != "AND" {
+		t.Errorf("expected AND, got %s", bs.Op)
+	}
+	if _, ok := bs.Left.(TagSource); !ok {
+		t.Errorf("expected TagSource on left, got %T", bs.Left)
+	}
+	if _, ok := bs.Right.(FolderSource); !ok {
+		t.Errorf("expected FolderSource on right, got %T", bs.Right)
+	}
+}
+
+func TestParseFromNegated(t *testing.T) {
+	q, err := Parse(`LIST FROM NOT #archived`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ns, ok := q.FromSource.(NegatedFromSource)
+	if !ok {
+		t.Fatalf("expected NegatedFromSource, got %T", q.FromSource)
+	}
+	if _, ok := ns.Inner.(TagSource); !ok {
+		t.Errorf("expected TagSource inside NOT, got %T", ns.Inner)
+	}
+}
+
+func TestParseFromGrouped(t *testing.T) {
+	q, err := Parse(`LIST FROM (#linux OR #windows) AND "Clients"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	bs, ok := q.FromSource.(BooleanFromSource)
+	if !ok {
+		t.Fatalf("expected BooleanFromSource, got %T", q.FromSource)
+	}
+	if bs.Op != "AND" {
+		t.Errorf("expected AND, got %s", bs.Op)
+	}
+}
+
+func TestParseWhereWithBoolLiterals(t *testing.T) {
+	q, err := Parse("LIST WHERE completed = true")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmp, ok := q.Where.(ComparisonExpr)
+	if !ok {
+		t.Fatalf("expected ComparisonExpr, got %T", q.Where)
+	}
+	if cmp.Value != "true" {
+		t.Errorf("expected value 'true', got %q", cmp.Value)
 	}
 }

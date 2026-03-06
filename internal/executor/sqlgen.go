@@ -34,7 +34,16 @@ func GenerateSQL(query *dql.Query) (string, []any, error) {
 	}
 
 	// FROM clause
-	if query.From != "" {
+	if query.FromSource != nil {
+		fromSQL, fromArgs, err := buildFromSource(query.FromSource)
+		if err != nil {
+			return "", nil, err
+		}
+		if fromSQL != "" {
+			where = append(where, fromSQL)
+			whereArgs = append(whereArgs, fromArgs...)
+		}
+	} else if query.From != "" {
 		from := query.From
 		if !strings.HasSuffix(from, "/") {
 			from += "/"
@@ -128,4 +137,66 @@ func buildExists(e dql.ExistsExpr) (string, []any, error) {
 	}
 	return "f.id IN (SELECT file_id FROM fields WHERE key = ?)",
 		[]any{e.Field}, nil
+}
+
+func buildFromSource(src dql.FromSource) (string, []any, error) {
+	switch s := src.(type) {
+	case dql.FolderSource:
+		from := s.Path
+		if !strings.HasSuffix(from, "/") {
+			from += "/"
+		}
+		return "f.path LIKE ? || '%'", []any{from}, nil
+
+	case dql.TagSource:
+		return "f.id IN (SELECT file_id FROM tags WHERE tag = ?)", []any{s.Tag}, nil
+
+	case dql.LinkSource:
+		if s.Outgoing {
+			// Files that are linked FROM the target page
+			return "f.id IN (SELECT l.file_id FROM links l JOIN files tf ON tf.path LIKE ? || '%' OR tf.title = ? WHERE l.file_id = tf.id)",
+				[]any{s.Target, s.Target}, nil
+		}
+		// Files that link TO the target page (incoming links)
+		return "f.id IN (SELECT file_id FROM links WHERE target = ?)", []any{s.Target}, nil
+
+	case dql.BooleanFromSource:
+		leftSQL, leftArgs, err := buildFromSource(s.Left)
+		if err != nil {
+			return "", nil, err
+		}
+		rightSQL, rightArgs, err := buildFromSource(s.Right)
+		if err != nil {
+			return "", nil, err
+		}
+		sql := fmt.Sprintf("(%s %s %s)", leftSQL, s.Op, rightSQL)
+		return sql, append(leftArgs, rightArgs...), nil
+
+	case dql.NegatedFromSource:
+		innerSQL, innerArgs, err := buildFromSource(s.Inner)
+		if err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf("NOT (%s)", innerSQL), innerArgs, nil
+
+	default:
+		return "", nil, fmt.Errorf("unsupported FROM source type: %T", src)
+	}
+}
+
+// CanPushToSQL returns true if the expression can be fully evaluated in SQL.
+// Used by the hybrid executor to decide what to push down.
+func CanPushToSQL(expr dql.Expr) bool {
+	switch e := expr.(type) {
+	case dql.ComparisonExpr:
+		return true
+	case dql.ExistsExpr:
+		return true
+	case dql.LogicalExpr:
+		return CanPushToSQL(e.Left) && CanPushToSQL(e.Right)
+	case dql.ParenExpr:
+		return CanPushToSQL(e.Inner)
+	default:
+		return false
+	}
 }

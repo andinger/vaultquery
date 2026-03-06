@@ -183,9 +183,88 @@ func (s *Store) Stats() (*StatsInfo, error) {
 	return &StatsInfo{FileCount: count}, nil
 }
 
+// SetTags replaces all tags for a given file ID.
+func (s *Store) SetTags(fileID int64, tags []string) error {
+	return setTags(s.db, fileID, tags)
+}
+
+// SetTagsTx is the transaction-aware version of SetTags.
+func (s *Store) SetTagsTx(tx *sql.Tx, fileID int64, tags []string) error {
+	return setTags(tx, fileID, tags)
+}
+
+func setTags(q querier, fileID int64, tags []string) error {
+	if _, err := q.Exec("DELETE FROM tags WHERE file_id=?", fileID); err != nil {
+		return err
+	}
+	for _, tag := range tags {
+		if _, err := q.Exec("INSERT OR IGNORE INTO tags (file_id, tag) VALUES (?, ?)", fileID, tag); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetLinks replaces all links for a given file ID.
+func (s *Store) SetLinks(fileID int64, links []string) error {
+	return setLinks(s.db, fileID, links)
+}
+
+// SetLinksTx is the transaction-aware version of SetLinks.
+func (s *Store) SetLinksTx(tx *sql.Tx, fileID int64, links []string) error {
+	return setLinks(tx, fileID, links)
+}
+
+func setLinks(q querier, fileID int64, links []string) error {
+	if _, err := q.Exec("DELETE FROM links WHERE file_id=?", fileID); err != nil {
+		return err
+	}
+	for _, link := range links {
+		if _, err := q.Exec("INSERT OR IGNORE INTO links (file_id, target) VALUES (?, ?)", fileID, link); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetTasks replaces all tasks for a given file ID.
+func (s *Store) SetTasks(fileID int64, tasks []TaskInfo) error {
+	return setTasks(s.db, fileID, tasks)
+}
+
+// SetTasksTx is the transaction-aware version of SetTasks.
+func (s *Store) SetTasksTx(tx *sql.Tx, fileID int64, tasks []TaskInfo) error {
+	return setTasks(tx, fileID, tasks)
+}
+
+// TaskInfo describes a single task item from markdown.
+type TaskInfo struct {
+	Line      int
+	Text      string
+	Completed bool
+	Section   string
+}
+
+func setTasks(q querier, fileID int64, tasks []TaskInfo) error {
+	if _, err := q.Exec("DELETE FROM tasks WHERE file_id=?", fileID); err != nil {
+		return err
+	}
+	for _, t := range tasks {
+		completed := 0
+		if t.Completed {
+			completed = 1
+		}
+		if _, err := q.Exec("INSERT INTO tasks (file_id, line, text, completed, section) VALUES (?, ?, ?, ?, ?)",
+			fileID, t.Line, t.Text, completed, t.Section); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // DropAll drops all tables and recreates the schema.
 func (s *Store) DropAll() error {
-	for _, table := range []string{"fields", "files", "meta"} {
+	for _, table := range []string{"tasks", "links", "tags", "fields", "files", "meta"} {
 		if _, err := s.db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
 			return err
 		}

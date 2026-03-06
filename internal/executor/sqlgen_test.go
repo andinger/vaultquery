@@ -6,6 +6,14 @@ import (
 	"github.com/andinger/vaultquery/internal/dql"
 )
 
+func simpleFieldDefs(names ...string) []dql.FieldDef {
+	fds := make([]dql.FieldDef, len(names))
+	for i, n := range names {
+		fds[i] = dql.FieldDef{Expr: dql.FieldAccessExpr{Parts: []string{n}}}
+	}
+	return fds
+}
+
 func TestGenerateSQL_SimpleList(t *testing.T) {
 	q := &dql.Query{Mode: "LIST"}
 	sql, args, err := GenerateSQL(q)
@@ -145,7 +153,7 @@ func TestGenerateSQL_AndOr(t *testing.T) {
 func TestGenerateSQL_Sort(t *testing.T) {
 	q := &dql.Query{
 		Mode:   "TABLE",
-		Fields: []string{"customer"},
+		Fields: simpleFieldDefs("customer"),
 		Sort:   []dql.SortField{{Field: "customer", Desc: false}},
 	}
 	sql, args, err := GenerateSQL(q)

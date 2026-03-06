@@ -260,6 +260,109 @@ func TestIntegration_OrOperator(t *testing.T) {
 	}
 }
 
+func TestIntegration_FromTag(t *testing.T) {
+	_, store := setupTestVault(t)
+
+	query, err := dql.Parse(`LIST FROM #linux`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result from #linux tag, got %d", len(result.Results))
+	}
+}
+
+func TestIntegration_FromTagAndFolder(t *testing.T) {
+	_, store := setupTestVault(t)
+
+	query, err := dql.Parse(`LIST FROM #linux AND "Clients"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 result from #linux AND Clients, got %d", len(result.Results))
+	}
+}
+
+func TestIntegration_TaskQuery(t *testing.T) {
+	vault, store := setupTestVault(t)
+
+	// Add a file with tasks
+	vault.addFile(t, "Projects/TODO.md", map[string]any{
+		"type": "Project",
+	}, "# Project Tasks\n\n- [ ] Implement feature\n- [x] Write tests\n- [ ] Deploy\n")
+
+	// Re-index to pick up tasks
+	fs := indexer.NewRealFS()
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler))
+	if err := idx.Update(vault.root); err != nil {
+		t.Fatal(err)
+	}
+
+	query, err := dql.Parse("TASK")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Mode != "TASK" {
+		t.Errorf("expected TASK mode, got %s", result.Mode)
+	}
+	if len(result.Results) < 3 {
+		t.Errorf("expected at least 3 tasks, got %d", len(result.Results))
+	}
+}
+
+func TestIntegration_WithoutID(t *testing.T) {
+	_, store := setupTestVault(t)
+
+	query, err := dql.Parse("TABLE WITHOUT ID customer, status WHERE type = 'Kubernetes Cluster'")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !query.WithoutID {
+		t.Error("expected WithoutID=true")
+	}
+	if len(result.Results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(result.Results))
+	}
+}
+
+func TestIntegration_DottedFieldAccess(t *testing.T) {
+	query, err := dql.Parse("LIST WHERE file.name = 'CLUSTER' SORT file.name ASC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Just verify parsing works for dotted fields
+	_ = query
+}
+
 func TestIntegration_IncrementalUpdate(t *testing.T) {
 	vault, store := setupTestVault(t)
 

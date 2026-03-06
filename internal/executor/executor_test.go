@@ -7,6 +7,15 @@ import (
 	"github.com/andinger/vaultquery/internal/index"
 )
 
+// simpleFields creates []FieldDef from simple field names.
+func simpleFields(names ...string) []dql.FieldDef {
+	fds := make([]dql.FieldDef, len(names))
+	for i, n := range names {
+		fds[i] = dql.FieldDef{Expr: dql.FieldAccessExpr{Parts: []string{n}}}
+	}
+	return fds
+}
+
 func setupTestStore(t *testing.T) *index.Store {
 	t.Helper()
 	store, err := index.Open(":memory:")
@@ -78,7 +87,7 @@ func TestExecute_TableWithSortAndWhere(t *testing.T) {
 
 	q := &dql.Query{
 		Mode:   "TABLE",
-		Fields: []string{"customer", "kubectl_context"},
+		Fields: simpleFields("customer", "kubectl_context"),
 		Where:  dql.ComparisonExpr{Field: "type", Op: "=", Value: "Kubernetes Cluster"},
 		Sort:   []dql.SortField{{Field: "customer", Desc: false}},
 	}
@@ -137,7 +146,7 @@ func TestExecute_TableContains(t *testing.T) {
 
 	q := &dql.Query{
 		Mode:   "TABLE",
-		Fields: []string{"customer"},
+		Fields: simpleFields("customer"),
 		Where:  dql.ComparisonExpr{Field: "tags", Op: "contains", Value: "linux"},
 	}
 
@@ -178,7 +187,7 @@ func TestExecute_TableWithLimit(t *testing.T) {
 
 	q := &dql.Query{
 		Mode:   "TABLE",
-		Fields: []string{"customer"},
+		Fields: simpleFields("customer"),
 		Where:  dql.ComparisonExpr{Field: "type", Op: "=", Value: "Kubernetes Cluster"},
 		Limit:  1,
 	}
@@ -247,13 +256,70 @@ func TestExecute_EmptyResult(t *testing.T) {
 	}
 }
 
+func TestExecute_TaskQuery(t *testing.T) {
+	store := setupTestStore(t)
+	exec := New(store)
+
+	// Add tasks to a file
+	if err := store.SetTasks(1, []index.TaskInfo{
+		{Line: 10, Text: "Fix bug", Completed: false, Section: "TODO"},
+		{Line: 11, Text: "Write tests", Completed: true, Section: "TODO"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	q := &dql.Query{Mode: "TASK"}
+	result, err := exec.Execute(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Mode != "TASK" {
+		t.Errorf("expected TASK mode, got %s", result.Mode)
+	}
+	if len(result.Results) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(result.Results))
+	}
+	if result.Results[0]["text"] != "Fix bug" {
+		t.Errorf("expected 'Fix bug', got %v", result.Results[0]["text"])
+	}
+}
+
+func TestExecute_TaskQueryWithWhere(t *testing.T) {
+	store := setupTestStore(t)
+	exec := New(store)
+
+	if err := store.SetTasks(1, []index.TaskInfo{
+		{Line: 10, Text: "Fix bug", Completed: false, Section: "TODO"},
+		{Line: 11, Text: "Write tests", Completed: true, Section: "TODO"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	q := &dql.Query{
+		Mode:  "TASK",
+		Where: dql.ComparisonExpr{Field: "completed", Op: "=", Value: "false"},
+	}
+	result, err := exec.Execute(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 1 {
+		t.Fatalf("expected 1 uncompleted task, got %d", len(result.Results))
+	}
+	if result.Results[0]["text"] != "Fix bug" {
+		t.Errorf("expected 'Fix bug', got %v", result.Results[0]["text"])
+	}
+}
+
 func TestExecute_MultiValueField(t *testing.T) {
 	store := setupTestStore(t)
 	exec := New(store)
 
 	q := &dql.Query{
 		Mode:   "TABLE",
-		Fields: []string{"tags"},
+		Fields: simpleFields("tags"),
 		Where:  dql.ComparisonExpr{Field: "tags", Op: "contains", Value: "linux"},
 	}
 

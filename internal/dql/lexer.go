@@ -25,9 +25,68 @@ func Lex(input string) ([]Token, error) {
 		case ch == ',':
 			tokens = append(tokens, Token{Type: COMMA, Literal: ",", Pos: i})
 			i++
-		case ch == '=':
-			tokens = append(tokens, Token{Type: EQ, Literal: "=", Pos: i})
+		case ch == '+':
+			tokens = append(tokens, Token{Type: PLUS, Literal: "+", Pos: i})
 			i++
+		case ch == '-':
+			tokens = append(tokens, Token{Type: MINUS, Literal: "-", Pos: i})
+			i++
+		case ch == '*':
+			tokens = append(tokens, Token{Type: STAR, Literal: "*", Pos: i})
+			i++
+		case ch == '/':
+			if i+1 < len(input) && input[i+1] == '/' {
+				// Comment — skip to end of line
+				i += 2
+				for i < len(input) && input[i] != '\n' {
+					i++
+				}
+			} else {
+				tokens = append(tokens, Token{Type: SLASH, Literal: "/", Pos: i})
+				i++
+			}
+		case ch == '%':
+			tokens = append(tokens, Token{Type: PERCENT, Literal: "%", Pos: i})
+			i++
+		case ch == '.':
+			tokens = append(tokens, Token{Type: DOT, Literal: ".", Pos: i})
+			i++
+		case ch == '#':
+			tokens = append(tokens, Token{Type: HASH, Literal: "#", Pos: i})
+			i++
+		case ch == '{':
+			tokens = append(tokens, Token{Type: LBRACE, Literal: "{", Pos: i})
+			i++
+		case ch == '}':
+			tokens = append(tokens, Token{Type: RBRACE, Literal: "}", Pos: i})
+			i++
+		case ch == '[':
+			pos := i
+			if i+1 < len(input) && input[i+1] == '[' {
+				tokens = append(tokens, Token{Type: LINK_OPEN, Literal: "[[", Pos: pos})
+				i += 2
+			} else {
+				tokens = append(tokens, Token{Type: LBRACKET, Literal: "[", Pos: pos})
+				i++
+			}
+		case ch == ']':
+			pos := i
+			if i+1 < len(input) && input[i+1] == ']' {
+				tokens = append(tokens, Token{Type: LINK_CLOSE, Literal: "]]", Pos: pos})
+				i += 2
+			} else {
+				tokens = append(tokens, Token{Type: RBRACKET, Literal: "]", Pos: pos})
+				i++
+			}
+		case ch == '=':
+			pos := i
+			if i+1 < len(input) && input[i+1] == '>' {
+				tokens = append(tokens, Token{Type: ARROW, Literal: "=>", Pos: pos})
+				i += 2
+			} else {
+				tokens = append(tokens, Token{Type: EQ, Literal: "=", Pos: pos})
+				i++
+			}
 		case ch == '!':
 			pos := i
 			i++
@@ -35,7 +94,7 @@ func Lex(input string) ([]Token, error) {
 				tokens = append(tokens, Token{Type: NEQ, Literal: "!=", Pos: pos})
 				i++
 			} else if i < len(input) && isLetter(input[i]) {
-				// !contains or !exists
+				// Peek ahead: could be !contains or !exists
 				start := i
 				for i < len(input) && isIdentChar(input[i]) {
 					i++
@@ -47,10 +106,12 @@ func Lex(input string) ([]Token, error) {
 				case "exists":
 					tokens = append(tokens, Token{Type: NOT_EXISTS, Literal: "!exists", Pos: pos})
 				default:
-					return nil, fmt.Errorf("unexpected token at position %d: !%s", pos, word)
+					// General negation: emit BANG then rewind to let the identifier be lexed normally
+					tokens = append(tokens, Token{Type: BANG, Literal: "!", Pos: pos})
+					i = start
 				}
 			} else {
-				return nil, fmt.Errorf("unexpected character at position %d: '!'", pos)
+				tokens = append(tokens, Token{Type: BANG, Literal: "!", Pos: pos})
 			}
 		case ch == '<':
 			pos := i
@@ -77,12 +138,22 @@ func Lex(input string) ([]Token, error) {
 			start := i
 			var s []byte
 			for i < len(input) {
-				if input[i] == '\\' && i+1 < len(input) && input[i+1] == quote {
-					s = append(s, input[start:i]...)
-					s = append(s, quote)
-					i += 2
-					start = i
-					continue
+				if input[i] == '\\' && i+1 < len(input) {
+					next := input[i+1]
+					if next == quote {
+						s = append(s, input[start:i]...)
+						s = append(s, quote)
+						i += 2
+						start = i
+						continue
+					}
+					if next == '\\' {
+						s = append(s, input[start:i]...)
+						s = append(s, '\\')
+						i += 2
+						start = i
+						continue
+					}
 				}
 				if input[i] == quote {
 					break
@@ -106,6 +177,14 @@ func Lex(input string) ([]Token, error) {
 			for i < len(input) && isIdentChar(input[i]) {
 				i++
 			}
+			// Greedily consume hyphens followed by alphanumeric (no whitespace) for
+			// Dataview-style identifiers like "time-played" or "my-date"
+			for i < len(input) && input[i] == '-' && i+1 < len(input) && isIdentChar(input[i+1]) {
+				i++ // consume hyphen
+				for i < len(input) && isIdentChar(input[i]) {
+					i++
+				}
+			}
 			lit := input[pos:i]
 			tokType := LookupIdent(lit)
 			tokens = append(tokens, Token{Type: tokType, Literal: lit, Pos: pos})
@@ -126,5 +205,5 @@ func isDigit(ch byte) bool {
 }
 
 func isIdentChar(ch byte) bool {
-	return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '.' || ch == '-'
+	return isLetter(ch) || isDigit(ch) || ch == '_'
 }

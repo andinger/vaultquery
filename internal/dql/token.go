@@ -14,6 +14,8 @@ const (
 	// Keywords
 	TABLE        = "TABLE"
 	LIST         = "LIST"
+	TASK         = "TASK"
+	CALENDAR     = "CALENDAR"
 	FROM         = "FROM"
 	WHERE        = "WHERE"
 	SORT         = "SORT"
@@ -23,30 +25,56 @@ const (
 	FLATTEN      = "FLATTEN"
 	AND          = "AND"
 	OR           = "OR"
+	NOT          = "NOT"
 	ASC          = "ASC"
 	DESC         = "DESC"
 	CONTAINS     = "CONTAINS"
 	NOT_CONTAINS = "NOT_CONTAINS"
 	EXISTS       = "EXISTS"
 	NOT_EXISTS   = "NOT_EXISTS"
+	AS           = "AS"
+	WITHOUT      = "WITHOUT"
+	ID           = "ID"
+	TRUE         = "TRUE"
+	FALSE        = "FALSE"
+	NULL_KW      = "NULL"
 
 	// Operators
-	EQ  = "="
-	NEQ = "!="
-	LT  = "<"
-	GT  = ">"
-	LTE = "<="
-	GTE = ">="
+	EQ      = "="
+	NEQ     = "!="
+	LT      = "<"
+	GT      = ">"
+	LTE     = "<="
+	GTE     = ">="
+	BANG    = "!"
+
+	// Arithmetic
+	PLUS    = "+"
+	MINUS   = "-"
+	STAR    = "*"
+	SLASH   = "/"
+	PERCENT = "%"
 
 	// Punctuation
-	LPAREN = "("
-	RPAREN = ")"
-	COMMA  = ","
+	LPAREN     = "("
+	RPAREN     = ")"
+	LBRACKET   = "["
+	RBRACKET   = "]"
+	LBRACE     = "{"
+	RBRACE     = "}"
+	COMMA      = ","
+	DOT        = "."
+	ARROW      = "=>"
+	HASH       = "#"
+	LINK_OPEN  = "[["
+	LINK_CLOSE = "]]"
 )
 
 var keywords = map[string]string{
 	"table":    TABLE,
 	"list":     LIST,
+	"task":     TASK,
+	"calendar": CALENDAR,
 	"from":     FROM,
 	"where":    WHERE,
 	"sort":     SORT,
@@ -56,10 +84,19 @@ var keywords = map[string]string{
 	"flatten":  FLATTEN,
 	"and":      AND,
 	"or":       OR,
-	"asc":      ASC,
-	"desc":     DESC,
+	"not":      NOT,
+	"asc":        ASC,
+	"ascending":  ASC,
+	"desc":       DESC,
+	"descending": DESC,
 	"contains": CONTAINS,
 	"exists":   EXISTS,
+	"as":       AS,
+	"without":  WITHOUT,
+	"id":       ID,
+	"true":     TRUE,
+	"false":    FALSE,
+	"null":     NULL_KW,
 }
 
 // Token represents a lexical token.

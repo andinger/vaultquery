@@ -125,6 +125,25 @@ func (idx *Indexer) Update(root string) error {
 		if err := idx.store.SetFieldsTx(tx, fileID, fields); err != nil {
 			return err
 		}
+
+		// Extract and store tags (frontmatter tags + inline #tags)
+		fmTags := fields["tags"]
+		allTags := ExtractTags(data, fmTags)
+		if err := idx.store.SetTagsTx(tx, fileID, allTags); err != nil {
+			return err
+		}
+
+		// Extract and store [[links]]
+		links := ExtractLinks(data)
+		if err := idx.store.SetLinksTx(tx, fileID, links); err != nil {
+			return err
+		}
+
+		// Extract and store tasks
+		tasks := ExtractTasks(data)
+		if err := idx.store.SetTasksTx(tx, fileID, tasks); err != nil {
+			return err
+		}
 	}
 	if skipped > 0 {
 		idx.log.Warn("some files were skipped due to invalid frontmatter", "skipped", skipped)

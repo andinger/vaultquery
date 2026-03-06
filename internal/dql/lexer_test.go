@@ -154,16 +154,117 @@ func TestLexNotContainsAndNotExists(t *testing.T) {
 	}
 }
 
-func TestLexIdentWithDotsAndHyphens(t *testing.T) {
-	tokens, err := Lex("file.name my-field")
+func TestLexDottedFieldAccess(t *testing.T) {
+	tokens, err := Lex("file.name")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if tokens[0].Type != IDENT || tokens[0].Literal != "file.name" {
-		t.Errorf("expected IDENT 'file.name', got %s %q", tokens[0].Type, tokens[0].Literal)
+	expected := []struct {
+		typ string
+		lit string
+	}{
+		{IDENT, "file"},
+		{DOT, "."},
+		{IDENT, "name"},
+		{EOF, ""},
 	}
-	if tokens[1].Type != IDENT || tokens[1].Literal != "my-field" {
-		t.Errorf("expected IDENT 'my-field', got %s %q", tokens[1].Type, tokens[1].Literal)
+	if len(tokens) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d", len(expected), len(tokens))
+	}
+	for i, e := range expected {
+		if tokens[i].Type != e.typ || tokens[i].Literal != e.lit {
+			t.Errorf("token %d: expected {%s %q}, got {%s %q}", i, e.typ, e.lit, tokens[i].Type, tokens[i].Literal)
+		}
+	}
+}
+
+func TestLexArithmeticTokens(t *testing.T) {
+	tokens, err := Lex("a + b - c * d / e % f")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{IDENT, PLUS, IDENT, MINUS, IDENT, STAR, IDENT, SLASH, IDENT, PERCENT, IDENT, EOF}
+	if len(tokens) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d", len(expected), len(tokens))
+	}
+	for i, e := range expected {
+		if tokens[i].Type != e {
+			t.Errorf("token %d: expected %s, got %s", i, e, tokens[i].Type)
+		}
+	}
+}
+
+func TestLexLinkAndHash(t *testing.T) {
+	tokens, err := Lex("[[page]] #tag")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []struct {
+		typ string
+		lit string
+	}{
+		{LINK_OPEN, "[["},
+		{IDENT, "page"},
+		{LINK_CLOSE, "]]"},
+		{HASH, "#"},
+		{IDENT, "tag"},
+		{EOF, ""},
+	}
+	if len(tokens) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d", len(expected), len(tokens))
+	}
+	for i, e := range expected {
+		if tokens[i].Type != e.typ || tokens[i].Literal != e.lit {
+			t.Errorf("token %d: expected {%s %q}, got {%s %q}", i, e.typ, e.lit, tokens[i].Type, tokens[i].Literal)
+		}
+	}
+}
+
+func TestLexArrow(t *testing.T) {
+	tokens, err := Lex("(x) => x")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{LPAREN, IDENT, RPAREN, ARROW, IDENT, EOF}
+	if len(tokens) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d", len(expected), len(tokens))
+	}
+	for i, e := range expected {
+		if tokens[i].Type != e {
+			t.Errorf("token %d: expected %s, got %s (%q)", i, e, tokens[i].Type, tokens[i].Literal)
+		}
+	}
+}
+
+func TestLexBoolAndNull(t *testing.T) {
+	tokens, err := Lex("true false null")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{TRUE, FALSE, NULL_KW, EOF}
+	if len(tokens) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d", len(expected), len(tokens))
+	}
+	for i, e := range expected {
+		if tokens[i].Type != e {
+			t.Errorf("token %d: expected %s, got %s", i, e, tokens[i].Type)
+		}
+	}
+}
+
+func TestLexBrackets(t *testing.T) {
+	tokens, err := Lex("a[0] {}")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := []string{IDENT, LBRACKET, NUMBER, RBRACKET, LBRACE, RBRACE, EOF}
+	if len(tokens) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d", len(expected), len(tokens))
+	}
+	for i, e := range expected {
+		if tokens[i].Type != e {
+			t.Errorf("token %d: expected %s, got %s", i, e, tokens[i].Type)
+		}
 	}
 }
 
