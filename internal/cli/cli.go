@@ -45,7 +45,7 @@ func newQueryCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE:  runQuery,
 	}
-	cmd.Flags().Bool("sync", false, "sync the index before querying")
+	cmd.Flags().Bool("index-only", false, "skip sync and use the existing index as-is")
 	cmd.Flags().String("format", "", "output format: json or toon (default: from config or json)")
 	return cmd
 }

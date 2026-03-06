@@ -137,13 +137,13 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	syncFlag, _ := cmd.Flags().GetBool("sync")
+	indexOnly, _ := cmd.Flags().GetBool("index-only")
 
 	var store *index.Store
-	if syncFlag {
-		store, err = ensureIndex(cmd)
-	} else {
+	if indexOnly {
 		store, err = openIndex(cmd)
+	} else {
+		store, err = ensureIndex(cmd)
 	}
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 # vaultquery
 
-Query Obsidian vault files by YAML frontmatter using a DQL-like query language. Indexes `.md` files into SQLite and outputs results as JSON.
+Query Obsidian vault files by YAML frontmatter using a DQL-like query language. Indexes `.md` files into SQLite and outputs results as JSON or [TOON](https://toon-format.org).
 
 ## Install
 
@@ -40,7 +40,7 @@ vaultquery status
 vaultquery reindex --vault ~/my-vault
 ```
 
-Every `query` command automatically updates the index before executing (incremental, mtime+size based).
+Every `query` command automatically syncs the index before executing (incremental, mtime+size based). Pass `--index-only` to skip syncing and use the existing index as-is.
 
 ## Vault-local storage
 
@@ -113,7 +113,7 @@ WHERE (type = 'Server' OR type = 'Cluster') AND status = 'active'
 
 ## Output
 
-All output is JSON:
+Default output is JSON:
 
 ```json
 {
@@ -129,6 +129,35 @@ All output is JSON:
   ]
 }
 ```
+
+### TOON format
+
+Pass `--format toon` (or set `format: toon` in `.vaultquery/config.yaml`) for [TOON](https://toon-format.org) output:
+
+```
+mode TABLE
+fields [
+  customer
+  kubectl_context
+]
+results [
+  {
+    path "Clients/Acme Corp/Production/CLUSTER.md"
+    title "Acme Production Cluster"
+    customer "Acme Corp"
+    kubectl_context "acme-prod"
+  }
+]
+```
+
+### JSON vs TOON
+
+| | JSON | TOON |
+|---|---|---|
+| **Ecosystem** | Universal, supported everywhere | Newer, lightweight |
+| **Readability** | Verbose (colons, commas, quoting) | Minimal syntax, easy to scan |
+| **Tooling** | `jq`, every language | Growing, Go library available |
+| **Best for** | Pipelines, API integration | Human review, config files |
 
 ## Frontmatter
 
@@ -155,6 +184,8 @@ tags:
 |------|---------|-------------|
 | `--vault` | Current directory | Vault root path |
 | `-v, --verbose` | false | Show detailed progress during indexing |
+| `--format` | `json` | Output format: `json` or `toon` (query only, overrides config) |
+| `--index-only` | false | Skip index sync, use existing index as-is (query only) |
 
 ## Development
 
@@ -168,6 +199,18 @@ go build ./cmd/vaultquery
 # Cross-compile snapshot
 goreleaser build --snapshot --clean
 ```
+
+## Comparison with Obsidian MCP Server
+
+| | vaultquery | Obsidian MCP Server |
+|---|---|---|
+| **Requires Obsidian** | No — headless, works on any `.md` vault | Yes — needs a running Obsidian instance |
+| **Structured output** | JSON and TOON with typed frontmatter fields | Unstructured text |
+| **Scriptable** | CLI tool, pipes into `jq`, shell scripts, CI | Designed for LLM tool-use via MCP |
+| **Query language** | DQL (Dataview-compatible subset) | Natural language via LLM |
+| **Index** | SQLite, incremental mtime+size sync | Obsidian's internal index |
+
+vaultquery is designed for automation, scripting, and headless environments where Obsidian is not installed or running.
 
 ## Acknowledgements
 
