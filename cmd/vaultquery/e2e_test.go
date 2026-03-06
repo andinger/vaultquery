@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -413,6 +414,105 @@ func TestE2E_ExcludeFolders(t *testing.T) {
 	if !ok || files != 3 {
 		t.Errorf("expected 3 files (Sales excluded), got %v", result["files"])
 	}
+}
+
+func TestE2E_QueryFormatTOON(t *testing.T) {
+	vault := createTestVault(t)
+
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	out, err := runVaultquery(t, vault, "query", "--format", "toon", `LIST WHERE type = 'Kubernetes Cluster'`)
+	if err != nil {
+		t.Fatalf("query --format toon failed: %v\n%s", err, out)
+	}
+
+	// Output should NOT be valid JSON
+	var jsonCheck map[string]any
+	if json.Unmarshal(out, &jsonCheck) == nil {
+		t.Error("expected non-JSON output for TOON format, but got valid JSON")
+	}
+
+	// Output should contain the mode
+	if !contains(string(out), "LIST") {
+		t.Errorf("TOON output should contain 'LIST', got: %s", out)
+	}
+}
+
+func TestE2E_QueryFormatFromConfig(t *testing.T) {
+	vault := createTestVault(t)
+
+	// Set format: toon in config
+	configDir := filepath.Join(vault, ".vaultquery")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("format: toon\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	// Query without --format flag should use config (toon)
+	out, err := runVaultquery(t, vault, "query", `LIST WHERE type = 'Lead'`)
+	if err != nil {
+		t.Fatalf("query failed: %v\n%s", err, out)
+	}
+
+	var jsonCheck map[string]any
+	if json.Unmarshal(out, &jsonCheck) == nil {
+		t.Error("expected non-JSON output when config sets toon, but got valid JSON")
+	}
+}
+
+func TestE2E_QueryFormatFlagOverridesConfig(t *testing.T) {
+	vault := createTestVault(t)
+
+	// Set format: toon in config
+	configDir := filepath.Join(vault, ".vaultquery")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("format: toon\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	// --format json should override config
+	out, err := runVaultquery(t, vault, "query", "--format", "json", `LIST WHERE type = 'Lead'`)
+	if err != nil {
+		t.Fatalf("query --format json failed: %v\n%s", err, out)
+	}
+
+	var result struct {
+		Mode    string           `json:"mode"`
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("expected valid JSON when --format json overrides config: %v\n%s", err, out)
+	}
+	if result.Mode != "LIST" {
+		t.Errorf("expected LIST mode, got %s", result.Mode)
+	}
+}
+
+func TestE2E_QueryFormatInvalid(t *testing.T) {
+	vault := createTestVault(t)
+
+	_, err := runVaultquery(t, vault, "query", "--format", "xml", `LIST`)
+	if err == nil {
+		t.Error("expected error for invalid format, got nil")
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && strings.Contains(s, substr)
 }
 
 func TestE2E_VaultqueryDirNotIndexed(t *testing.T) {

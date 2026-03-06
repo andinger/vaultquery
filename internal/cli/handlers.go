@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	toon "github.com/toon-format/toon-go"
 
 	"github.com/andinger/vaultquery/internal/config"
 	"github.com/andinger/vaultquery/internal/dql"
@@ -84,10 +85,56 @@ func openIndex(cmd *cobra.Command) (*index.Store, error) {
 	return store, nil
 }
 
+func resolveFormat(cmd *cobra.Command, cfg *config.Config) (string, error) {
+	formatFlag, _ := cmd.Flags().GetString("format")
+	format := "json"
+	if cfg.Format != "" {
+		format = cfg.Format
+	}
+	if formatFlag != "" {
+		format = formatFlag
+	}
+	switch format {
+	case "json", "toon":
+		return format, nil
+	default:
+		return "", fmt.Errorf("unsupported output format: %q (use json or toon)", format)
+	}
+}
+
+func encodeResult(result any, format string) error {
+	switch format {
+	case "toon":
+		data, err := toon.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("toon encoding: %w", err)
+		}
+		_, err = os.Stdout.Write(append(data, '\n'))
+		return err
+	default:
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+}
+
 func runQuery(cmd *cobra.Command, args []string) error {
 	query, err := dql.Parse(args[0])
 	if err != nil {
 		return fmt.Errorf("parse error: %w", err)
+	}
+
+	vaultRoot, err := getVaultRoot(cmd)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.LoadConfig(vaultRoot)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	format, err := resolveFormat(cmd, cfg)
+	if err != nil {
+		return err
 	}
 
 	syncFlag, _ := cmd.Flags().GetBool("sync")
@@ -109,9 +156,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("query error: %w", err)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(result)
+	return encodeResult(result, format)
 }
 
 func runIndex(cmd *cobra.Command, _ []string) error {

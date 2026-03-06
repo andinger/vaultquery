@@ -12,6 +12,7 @@ const vaultDirName = ".vaultquery"
 // Config holds vault-local configuration.
 type Config struct {
 	Exclude []string `yaml:"exclude"`
+	Format  string   `yaml:"format"`
 }
 
 // VaultDir returns the path to the .vaultquery directory inside a vault.
