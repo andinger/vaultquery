@@ -169,6 +169,10 @@ go build ./cmd/vaultquery
 goreleaser build --snapshot --clean
 ```
 
+## Acknowledgements
+
+vaultquery is heavily inspired by the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin for Obsidian by Michael Brenan. Dataview's query language (DQL) and its approach to treating frontmatter as queryable data were the foundation for this tool. Thank you for creating such a brilliant plugin.
+
 ## License
 
 MIT
