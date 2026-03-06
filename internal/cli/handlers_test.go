@@ -65,7 +65,7 @@ func TestResolveFormat(t *testing.T) {
 
 func TestEncodeResult_JSON(t *testing.T) {
 	result := &executor.Result{
-		Mode:   "LIST",
+		Mode:    "LIST",
 		Results: []map[string]any{{"file": "test.md"}},
 	}
 
@@ -99,7 +99,7 @@ func TestEncodeResult_JSON(t *testing.T) {
 
 func TestEncodeResult_TOON(t *testing.T) {
 	result := &executor.Result{
-		Mode:   "LIST",
+		Mode:    "LIST",
 		Results: []map[string]any{{"file": "test.md"}},
 	}
 
