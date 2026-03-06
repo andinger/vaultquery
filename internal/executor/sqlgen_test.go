@@ -144,9 +144,9 @@ func TestGenerateSQL_AndOr(t *testing.T) {
 
 func TestGenerateSQL_Sort(t *testing.T) {
 	q := &dql.Query{
-		Mode: "TABLE",
+		Mode:   "TABLE",
 		Fields: []string{"customer"},
-		Sort: []dql.SortField{{Field: "customer", Desc: false}},
+		Sort:   []dql.SortField{{Field: "customer", Desc: false}},
 	}
 	sql, args, err := GenerateSQL(q)
 	if err != nil {
@@ -163,8 +163,8 @@ func TestGenerateSQL_Sort(t *testing.T) {
 
 func TestGenerateSQL_SortDesc(t *testing.T) {
 	q := &dql.Query{
-		Mode:   "LIST",
-		Sort:   []dql.SortField{{Field: "name", Desc: true}},
+		Mode: "LIST",
+		Sort: []dql.SortField{{Field: "name", Desc: true}},
 	}
 	sql, _, err := GenerateSQL(q)
 	if err != nil {

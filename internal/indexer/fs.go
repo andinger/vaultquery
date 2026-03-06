@@ -109,6 +109,6 @@ type memDirEntry struct {
 }
 
 func (e *memDirEntry) Name() string               { return e.name }
-func (e *memDirEntry) IsDir() bool                 { return false }
-func (e *memDirEntry) Type() fs.FileMode           { return 0 }
-func (e *memDirEntry) Info() (fs.FileInfo, error)   { return nil, nil }
+func (e *memDirEntry) IsDir() bool                { return false }
+func (e *memDirEntry) Type() fs.FileMode          { return 0 }
+func (e *memDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
