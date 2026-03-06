@@ -44,7 +44,7 @@ func ensureIndex(cmd *cobra.Command) (*index.Store, error) {
 	fs := indexer.NewRealFS()
 	idx := indexer.New(store, fs)
 	if err := idx.Update(vaultRoot); err != nil {
-		store.Close()
+		_ = store.Close()
 		return nil, fmt.Errorf("updating index: %w", err)
 	}
 

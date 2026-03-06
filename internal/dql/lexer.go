@@ -16,7 +16,7 @@ func Lex(input string) ([]Token, error) {
 		}
 
 		switch {
-		case ch == '(' :
+		case ch == '(':
 			tokens = append(tokens, Token{Type: LPAREN, Literal: "(", Pos: i})
 			i++
 		case ch == ')':
@@ -25,7 +25,7 @@ func Lex(input string) ([]Token, error) {
 		case ch == ',':
 			tokens = append(tokens, Token{Type: COMMA, Literal: ",", Pos: i})
 			i++
-		case ch == '=' :
+		case ch == '=':
 			tokens = append(tokens, Token{Type: EQ, Literal: "=", Pos: i})
 			i++
 		case ch == '!':

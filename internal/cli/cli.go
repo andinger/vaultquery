@@ -7,9 +7,9 @@ import (
 // NewRootCmd creates the root cobra command with all subcommands.
 func NewRootCmd(version, commit, date string) *cobra.Command {
 	root := &cobra.Command{
-		Use:     "vaultquery",
-		Short:   "Query Obsidian vault files by YAML frontmatter",
-		Version: version,
+		Use:          "vaultquery",
+		Short:        "Query Obsidian vault files by YAML frontmatter",
+		Version:      version,
 		SilenceUsage: true,
 	}
 
