@@ -94,7 +94,7 @@ func setupTestVault(t *testing.T) (*testVault, *index.Store) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler))
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler), nil)
 	if err := idx.Update(vault.root); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestIntegration_TaskQuery(t *testing.T) {
 
 	// Re-index to pick up tasks
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler))
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler), nil)
 	if err := idx.Update(vault.root); err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestIntegration_IncrementalUpdate(t *testing.T) {
 	}, "# Initech Cluster\n")
 
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler))
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler), nil)
 	if err := idx.Update(vault.root); err != nil {
 		t.Fatal(err)
 	}

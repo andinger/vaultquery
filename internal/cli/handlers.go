@@ -15,28 +15,27 @@ import (
 	"github.com/andinger/vaultquery/internal/indexer"
 )
 
-func getFlags(cmd *cobra.Command) (vaultRoot, dbPath string, err error) {
+func getVaultRoot(cmd *cobra.Command) (string, error) {
 	vaultFlag, _ := cmd.Flags().GetString("vault")
-	dbFlag, _ := cmd.Flags().GetString("db")
-
-	vaultRoot, err = config.ResolveVaultRoot(vaultFlag)
-	if err != nil {
-		return "", "", fmt.Errorf("resolving vault root: %w", err)
-	}
-
-	dbPath = dbFlag
-	if dbPath == "" {
-		dbPath = config.DefaultDBPath()
-	}
-	return vaultRoot, dbPath, nil
+	return config.ResolveVaultRoot(vaultFlag)
 }
 
 func ensureIndex(cmd *cobra.Command) (*index.Store, error) {
-	vaultRoot, dbPath, err := getFlags(cmd)
+	vaultRoot, err := getVaultRoot(cmd)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := config.EnsureVaultDir(vaultRoot); err != nil {
+		return nil, fmt.Errorf("creating .vaultquery directory: %w", err)
+	}
+
+	cfg, err := config.LoadConfig(vaultRoot)
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+
+	dbPath := config.VaultDBPath(vaultRoot)
 	store, err := index.Open(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening index: %w", err)
@@ -44,7 +43,7 @@ func ensureIndex(cmd *cobra.Command) (*index.Store, error) {
 
 	log := newLogger(cmd)
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs, log)
+	idx := indexer.New(store, fs, log, cfg.Exclude)
 	if err := idx.Update(vaultRoot); err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf("updating index: %w", err)
@@ -54,10 +53,12 @@ func ensureIndex(cmd *cobra.Command) (*index.Store, error) {
 }
 
 func openIndex(cmd *cobra.Command) (*index.Store, error) {
-	vaultRoot, dbPath, err := getFlags(cmd)
+	vaultRoot, err := getVaultRoot(cmd)
 	if err != nil {
 		return nil, err
 	}
+
+	dbPath := config.VaultDBPath(vaultRoot)
 
 	// If DB doesn't exist yet, do a full sync (first-run)
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -78,13 +79,6 @@ func openIndex(cmd *cobra.Command) (*index.Store, error) {
 	if stats.FileCount == 0 {
 		_ = store.Close()
 		return ensureIndex(cmd)
-	}
-
-	// Verify vault root matches
-	storedRoot, _ := store.GetMeta("vault_root")
-	if storedRoot != "" && storedRoot != vaultRoot {
-		_ = store.Close()
-		return nil, fmt.Errorf("index was built for vault %q, but current vault is %q; run 'vaultquery reindex'", storedRoot, vaultRoot)
 	}
 
 	return store, nil
@@ -142,11 +136,21 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 }
 
 func runReindex(cmd *cobra.Command, _ []string) error {
-	vaultRoot, dbPath, err := getFlags(cmd)
+	vaultRoot, err := getVaultRoot(cmd)
 	if err != nil {
 		return err
 	}
 
+	if err := config.EnsureVaultDir(vaultRoot); err != nil {
+		return fmt.Errorf("creating .vaultquery directory: %w", err)
+	}
+
+	cfg, err := config.LoadConfig(vaultRoot)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	dbPath := config.VaultDBPath(vaultRoot)
 	store, err := index.Open(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening index: %w", err)
@@ -159,7 +163,7 @@ func runReindex(cmd *cobra.Command, _ []string) error {
 
 	log := newLogger(cmd)
 	fs := indexer.NewRealFS()
-	idx := indexer.New(store, fs, log)
+	idx := indexer.New(store, fs, log, cfg.Exclude)
 	start := time.Now()
 	if err := idx.Update(vaultRoot); err != nil {
 		return fmt.Errorf("reindexing: %w", err)
@@ -179,10 +183,12 @@ func runReindex(cmd *cobra.Command, _ []string) error {
 }
 
 func runStatus(cmd *cobra.Command, _ []string) error {
-	_, dbPath, err := getFlags(cmd)
+	vaultRoot, err := getVaultRoot(cmd)
 	if err != nil {
 		return err
 	}
+
+	dbPath := config.VaultDBPath(vaultRoot)
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		enc := json.NewEncoder(os.Stdout)
@@ -204,14 +210,14 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	vaultRoot, _ := store.GetMeta("vault_root")
+	vaultMeta, _ := store.GetMeta("vault_root")
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(map[string]any{
 		"indexed":    true,
 		"db_path":    dbPath,
-		"vault_root": vaultRoot,
+		"vault_root": vaultMeta,
 		"files":      stats.FileCount,
 	})
 }

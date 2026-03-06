@@ -42,6 +42,35 @@ vaultquery reindex --vault ~/my-vault
 
 Every `query` command automatically updates the index before executing (incremental, mtime+size based).
 
+## Vault-local storage
+
+vaultquery stores its index database in a `.vaultquery/` directory inside each vault root:
+
+```
+my-vault/
+├── .vaultquery/
+│   ├── index.db        # SQLite database
+│   ├── config.yaml     # Optional configuration
+│   └── .gitignore      # Auto-created, ignores all files
+├── Notes/
+└── ...
+```
+
+This enables indexing multiple vaults independently. The `.vaultquery/` directory and `.gitignore` are created automatically on first index.
+
+### Folder exclusion
+
+Create `.vaultquery/config.yaml` to exclude folders from indexing:
+
+```yaml
+exclude:
+  - .obsidian
+  - .trash
+  - Templates
+```
+
+Paths are relative to the vault root. Matching is prefix-based (e.g. `Archive/Old` excludes everything under that path). The `.vaultquery` directory itself is always excluded.
+
 ## DQL Reference
 
 ### Query Modes
@@ -122,10 +151,10 @@ tags:
 
 ## Configuration
 
-| Flag | Env | Default | Description |
-|------|-----|---------|-------------|
-| `--vault` | - | Current directory | Vault root path |
-| `--db` | - | `~/.local/share/vaultquery/index.db` | SQLite database path |
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--vault` | Current directory | Vault root path |
+| `-v, --verbose` | false | Show detailed progress during indexing |
 
 ## Development
 

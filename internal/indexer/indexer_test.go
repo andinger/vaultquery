@@ -43,7 +43,7 @@ func TestInitialIndex(t *testing.T) {
 	mfs.AddFile(testRoot+"/clusters/acme.md", testContent(), testTime)
 	mfs.AddFile(testRoot+"/clusters/beta.md", []byte("# Beta Cluster\n"), testTime.Add(time.Hour))
 
-	idx := New(store, mfs, nopLogger)
+	idx := New(store, mfs, nopLogger, nil)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestIncrementalAdd(t *testing.T) {
 	mfs := NewMemFS()
 	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
 
-	idx := New(store, mfs, nopLogger)
+	idx := New(store, mfs, nopLogger, nil)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestIncrementalChange(t *testing.T) {
 	mfs := NewMemFS()
 	mfs.AddFile(testRoot+"/a.md", []byte("# Original\n"), testTime)
 
-	idx := New(store, mfs, nopLogger)
+	idx := New(store, mfs, nopLogger, nil)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestIncrementalDelete(t *testing.T) {
 	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
 	mfs.AddFile(testRoot+"/b.md", []byte("# B\n"), testTime)
 
-	idx := New(store, mfs, nopLogger)
+	idx := New(store, mfs, nopLogger, nil)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestNoChanges(t *testing.T) {
 	mfs := NewMemFS()
 	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
 
-	idx := New(store, mfs, nopLogger)
+	idx := New(store, mfs, nopLogger, nil)
 	if err := idx.Update(testRoot); err != nil {
 		t.Fatal(err)
 	}
@@ -173,5 +173,55 @@ func TestNoChanges(t *testing.T) {
 	files, _ := store.ListFiles()
 	if len(files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+}
+
+func TestExcludeDirs(t *testing.T) {
+	store := setupStore(t)
+	mfs := NewMemFS()
+	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
+	mfs.AddFile(testRoot+"/Templates/template.md", []byte("# Template\n"), testTime)
+	mfs.AddFile(testRoot+"/.obsidian/config.md", []byte("# Config\n"), testTime)
+	mfs.AddFile(testRoot+"/Clients/acme.md", []byte("# Acme\n"), testTime)
+
+	idx := New(store, mfs, nopLogger, []string{"Templates", ".obsidian"})
+	if err := idx.Update(testRoot); err != nil {
+		t.Fatal(err)
+	}
+
+	files, _ := store.ListFiles()
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(files))
+	}
+
+	fileMap := make(map[string]bool)
+	for _, f := range files {
+		fileMap[f.Path] = true
+	}
+	if !fileMap["a.md"] {
+		t.Error("expected a.md to be indexed")
+	}
+	if !fileMap["Clients/acme.md"] {
+		t.Error("expected Clients/acme.md to be indexed")
+	}
+}
+
+func TestVaultqueryDirAlwaysExcluded(t *testing.T) {
+	store := setupStore(t)
+	mfs := NewMemFS()
+	mfs.AddFile(testRoot+"/a.md", []byte("# A\n"), testTime)
+	mfs.AddFile(testRoot+"/.vaultquery/index.md", []byte("# Index\n"), testTime)
+
+	idx := New(store, mfs, nopLogger, nil)
+	if err := idx.Update(testRoot); err != nil {
+		t.Fatal(err)
+	}
+
+	files, _ := store.ListFiles()
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	if files[0].Path != "a.md" {
+		t.Errorf("expected a.md, got %s", files[0].Path)
 	}
 }

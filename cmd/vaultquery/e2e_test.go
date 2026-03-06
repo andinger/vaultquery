@@ -81,18 +81,17 @@ status: active
 	return root
 }
 
-func runVaultquery(t *testing.T, dbPath, vaultRoot string, args ...string) ([]byte, error) {
+func runVaultquery(t *testing.T, vaultRoot string, args ...string) ([]byte, error) {
 	t.Helper()
-	fullArgs := append([]string{"--db", dbPath, "--vault", vaultRoot}, args...)
+	fullArgs := append([]string{"--vault", vaultRoot}, args...)
 	cmd := exec.Command(binaryPath, fullArgs...)
 	return cmd.CombinedOutput()
 }
 
 func TestE2E_IndexCommand(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	out, err := runVaultquery(t, dbPath, vault, "index")
+	out, err := runVaultquery(t, vault, "index")
 	if err != nil {
 		t.Fatalf("index command failed: %v\n%s", err, out)
 	}
@@ -106,18 +105,29 @@ func TestE2E_IndexCommand(t *testing.T) {
 	if !ok || files != 4 {
 		t.Errorf("expected 4 files, got %v", result["files"])
 	}
+
+	// Verify DB was created inside vault
+	dbPath := filepath.Join(vault, ".vaultquery", "index.db")
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		t.Error("expected .vaultquery/index.db to be created inside vault")
+	}
+
+	// Verify .gitignore was created
+	gitignore := filepath.Join(vault, ".vaultquery", ".gitignore")
+	if _, err := os.Stat(gitignore); os.IsNotExist(err) {
+		t.Error("expected .vaultquery/.gitignore to be created")
+	}
 }
 
 func TestE2E_QueryCommand(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// Index first, then query (query no longer auto-syncs)
-	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	out, err := runVaultquery(t, dbPath, vault, "query", `LIST WHERE type = 'Kubernetes Cluster'`)
+	out, err := runVaultquery(t, vault, "query", `LIST WHERE type = 'Kubernetes Cluster'`)
 	if err != nil {
 		t.Fatalf("query command failed: %v\n%s", err, out)
 	}
@@ -140,13 +150,12 @@ func TestE2E_QueryCommand(t *testing.T) {
 
 func TestE2E_TableQuery(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	out, err := runVaultquery(t, dbPath, vault, "query",
+	out, err := runVaultquery(t, vault, "query",
 		`TABLE customer, kubectl_context WHERE type = 'Kubernetes Cluster' SORT customer ASC`)
 	if err != nil {
 		t.Fatalf("query command failed: %v\n%s", err, out)
@@ -177,15 +186,14 @@ func TestE2E_TableQuery(t *testing.T) {
 
 func TestE2E_ReindexCommand(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// First index
-	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
 		t.Fatalf("index failed: %v", err)
 	}
 
 	// Reindex
-	out, err := runVaultquery(t, dbPath, vault, "reindex")
+	out, err := runVaultquery(t, vault, "reindex")
 	if err != nil {
 		t.Fatalf("reindex command failed: %v\n%s", err, out)
 	}
@@ -203,10 +211,9 @@ func TestE2E_ReindexCommand(t *testing.T) {
 
 func TestE2E_StatusCommand(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// Status before index
-	out, err := runVaultquery(t, dbPath, vault, "status")
+	out, err := runVaultquery(t, vault, "status")
 	if err != nil {
 		t.Fatalf("status command failed: %v\n%s", err, out)
 	}
@@ -220,11 +227,11 @@ func TestE2E_StatusCommand(t *testing.T) {
 	}
 
 	// Index, then status
-	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	out, err = runVaultquery(t, dbPath, vault, "status")
+	out, err = runVaultquery(t, vault, "status")
 	if err != nil {
 		t.Fatalf("status command failed: %v\n%s", err, out)
 	}
@@ -238,13 +245,18 @@ func TestE2E_StatusCommand(t *testing.T) {
 	if result["files"].(float64) != 4 {
 		t.Errorf("expected 4 files, got %v", result["files"])
 	}
+	// Verify db_path points to vault-local location
+	dbPath, _ := result["db_path"].(string)
+	expected := filepath.Join(vault, ".vaultquery", "index.db")
+	if dbPath != expected {
+		t.Errorf("db_path = %q, want %q", dbPath, expected)
+	}
 }
 
 func TestE2E_InvalidQuery(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	_, err := runVaultquery(t, dbPath, vault, "query", "INVALID QUERY SYNTAX")
+	_, err := runVaultquery(t, vault, "query", "INVALID QUERY SYNTAX")
 	if err == nil {
 		t.Error("expected error for invalid query, got nil")
 	}
@@ -252,9 +264,8 @@ func TestE2E_InvalidQuery(t *testing.T) {
 
 func TestE2E_MissingQueryArg(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	_, err := runVaultquery(t, dbPath, vault, "query")
+	_, err := runVaultquery(t, vault, "query")
 	if err == nil {
 		t.Error("expected error for missing query arg, got nil")
 	}
@@ -262,10 +273,9 @@ func TestE2E_MissingQueryArg(t *testing.T) {
 
 func TestE2E_QuerySyncFlag(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// --sync should index and query in one step (no prior index needed)
-	out, err := runVaultquery(t, dbPath, vault, "query", "--sync", `LIST WHERE type = 'Kubernetes Cluster'`)
+	out, err := runVaultquery(t, vault, "query", "--sync", `LIST WHERE type = 'Kubernetes Cluster'`)
 	if err != nil {
 		t.Fatalf("query --sync failed: %v\n%s", err, out)
 	}
@@ -283,10 +293,9 @@ func TestE2E_QuerySyncFlag(t *testing.T) {
 
 func TestE2E_QueryAutoSyncsFirstRun(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// No prior index — query should auto-sync on first run (DB doesn't exist)
-	out, err := runVaultquery(t, dbPath, vault, "query", `LIST WHERE type = 'Kubernetes Cluster'`)
+	out, err := runVaultquery(t, vault, "query", `LIST WHERE type = 'Kubernetes Cluster'`)
 	if err != nil {
 		t.Fatalf("query (first run) failed: %v\n%s", err, out)
 	}
@@ -304,10 +313,9 @@ func TestE2E_QueryAutoSyncsFirstRun(t *testing.T) {
 
 func TestE2E_QuerySkipsSyncOnExistingIndex(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	// Index first
-	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
 		t.Fatalf("index failed: %v", err)
 	}
 
@@ -321,7 +329,7 @@ func TestE2E_QuerySkipsSyncOnExistingIndex(t *testing.T) {
 	}
 
 	// Query without --sync should NOT see the new file
-	out, err := runVaultquery(t, dbPath, vault, "query", `LIST WHERE type = 'Lead'`)
+	out, err := runVaultquery(t, vault, "query", `LIST WHERE type = 'Lead'`)
 	if err != nil {
 		t.Fatalf("query failed: %v\n%s", err, out)
 	}
@@ -337,7 +345,7 @@ func TestE2E_QuerySkipsSyncOnExistingIndex(t *testing.T) {
 	}
 
 	// Query with --sync SHOULD see the new file
-	out, err = runVaultquery(t, dbPath, vault, "query", "--sync", `LIST WHERE type = 'Lead'`)
+	out, err = runVaultquery(t, vault, "query", "--sync", `LIST WHERE type = 'Lead'`)
 	if err != nil {
 		t.Fatalf("query --sync failed: %v\n%s", err, out)
 	}
@@ -352,13 +360,12 @@ func TestE2E_QuerySkipsSyncOnExistingIndex(t *testing.T) {
 
 func TestE2E_ContainsQuery(t *testing.T) {
 	vault := createTestVault(t)
-	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+	if _, err := runVaultquery(t, vault, "index"); err != nil {
 		t.Fatalf("index failed: %v", err)
 	}
 
-	out, err := runVaultquery(t, dbPath, vault, "query", `TABLE customer WHERE tags contains 'linux'`)
+	out, err := runVaultquery(t, vault, "query", `TABLE customer WHERE tags contains 'linux'`)
 	if err != nil {
 		t.Fatalf("query failed: %v\n%s", err, out)
 	}
@@ -375,5 +382,64 @@ func TestE2E_ContainsQuery(t *testing.T) {
 	}
 	if result.Results[0]["customer"] != "Acme Corp" {
 		t.Errorf("expected 'Acme Corp', got %v", result.Results[0]["customer"])
+	}
+}
+
+func TestE2E_ExcludeFolders(t *testing.T) {
+	vault := createTestVault(t)
+
+	// Create config that excludes Sales folder
+	configDir := filepath.Join(vault, ".vaultquery")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configFile := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte("exclude:\n  - Sales\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runVaultquery(t, vault, "index")
+	if err != nil {
+		t.Fatalf("index failed: %v\n%s", err, out)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+
+	// 4 total files minus 1 in Sales = 3
+	files, ok := result["files"].(float64)
+	if !ok || files != 3 {
+		t.Errorf("expected 3 files (Sales excluded), got %v", result["files"])
+	}
+}
+
+func TestE2E_VaultqueryDirNotIndexed(t *testing.T) {
+	vault := createTestVault(t)
+
+	// Put a .md file in .vaultquery to ensure it's not indexed
+	configDir := filepath.Join(vault, ".vaultquery")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "notes.md"), []byte("---\ntype: Internal\n---\n# Notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runVaultquery(t, vault, "index")
+	if err != nil {
+		t.Fatalf("index failed: %v\n%s", err, out)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+
+	// Should be 4 files (the .vaultquery/notes.md should NOT be counted)
+	files, ok := result["files"].(float64)
+	if !ok || files != 4 {
+		t.Errorf("expected 4 files (.vaultquery excluded), got %v", result["files"])
 	}
 }

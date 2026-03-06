@@ -16,14 +16,29 @@ type fsInfo struct {
 
 // Indexer performs change detection and index updates.
 type Indexer struct {
-	store *index.Store
-	fs    FS
-	log   *slog.Logger
+	store       *index.Store
+	fs          FS
+	log         *slog.Logger
+	excludeDirs []string
 }
 
 // New creates a new Indexer.
-func New(store *index.Store, fs FS, log *slog.Logger) *Indexer {
-	return &Indexer{store: store, fs: fs, log: log}
+func New(store *index.Store, fs FS, log *slog.Logger, excludeDirs []string) *Indexer {
+	return &Indexer{store: store, fs: fs, log: log, excludeDirs: excludeDirs}
+}
+
+// shouldExclude returns true if the given relative path should be excluded from indexing.
+func (idx *Indexer) shouldExclude(relPath string) bool {
+	// Always exclude .vaultquery directory
+	if relPath == ".vaultquery" || strings.HasPrefix(relPath, ".vaultquery/") || strings.HasPrefix(relPath, ".vaultquery\\") {
+		return true
+	}
+	for _, dir := range idx.excludeDirs {
+		if relPath == dir || strings.HasPrefix(relPath, dir+"/") || strings.HasPrefix(relPath, dir+"\\") {
+			return true
+		}
+	}
+	return false
 }
 
 // Update scans the vault at root and synchronises the index.
@@ -34,16 +49,29 @@ func (idx *Indexer) Update(root string) error {
 		if err != nil {
 			return err
 		}
+
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+
+		// Skip excluded directories (efficient for real FS via SkipDir)
 		if d.IsDir() {
+			if idx.shouldExclude(rel) {
+				return fs.SkipDir
+			}
 			return nil
 		}
+
 		if !strings.HasSuffix(path, ".md") {
 			return nil
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
+
+		// Also check file paths for MemFS compatibility (no dir entries)
+		if idx.shouldExclude(rel) {
+			return nil
 		}
+
 		info, err := idx.fs.Stat(path)
 		if err != nil {
 			return err

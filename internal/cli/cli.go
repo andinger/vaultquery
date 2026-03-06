@@ -24,7 +24,6 @@ func NewRootCmd(version, commit, date string) *cobra.Command {
 	)
 
 	root.PersistentFlags().String("vault", "", "path to vault root (default: current directory)")
-	root.PersistentFlags().String("db", "", "path to SQLite database (default: XDG data dir)")
 	root.PersistentFlags().BoolP("verbose", "v", false, "show detailed progress during indexing")
 
 	return root
