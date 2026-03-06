@@ -112,6 +112,11 @@ func TestE2E_QueryCommand(t *testing.T) {
 	vault := createTestVault(t)
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
+	// Index first, then query (query no longer auto-syncs)
+	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
 	out, err := runVaultquery(t, dbPath, vault, "query", `LIST WHERE type = 'Kubernetes Cluster'`)
 	if err != nil {
 		t.Fatalf("query command failed: %v\n%s", err, out)
@@ -136,6 +141,10 @@ func TestE2E_QueryCommand(t *testing.T) {
 func TestE2E_TableQuery(t *testing.T) {
 	vault := createTestVault(t)
 	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
 
 	out, err := runVaultquery(t, dbPath, vault, "query",
 		`TABLE customer, kubectl_context WHERE type = 'Kubernetes Cluster' SORT customer ASC`)
@@ -251,9 +260,103 @@ func TestE2E_MissingQueryArg(t *testing.T) {
 	}
 }
 
+func TestE2E_QuerySyncFlag(t *testing.T) {
+	vault := createTestVault(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	// --sync should index and query in one step (no prior index needed)
+	out, err := runVaultquery(t, dbPath, vault, "query", "--sync", `LIST WHERE type = 'Kubernetes Cluster'`)
+	if err != nil {
+		t.Fatalf("query --sync failed: %v\n%s", err, out)
+	}
+
+	var result struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if len(result.Results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(result.Results))
+	}
+}
+
+func TestE2E_QueryAutoSyncsFirstRun(t *testing.T) {
+	vault := createTestVault(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	// No prior index — query should auto-sync on first run (DB doesn't exist)
+	out, err := runVaultquery(t, dbPath, vault, "query", `LIST WHERE type = 'Kubernetes Cluster'`)
+	if err != nil {
+		t.Fatalf("query (first run) failed: %v\n%s", err, out)
+	}
+
+	var result struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if len(result.Results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(result.Results))
+	}
+}
+
+func TestE2E_QuerySkipsSyncOnExistingIndex(t *testing.T) {
+	vault := createTestVault(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	// Index first
+	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
+
+	// Add a new file after indexing
+	newFile := filepath.Join(vault, "Sales/NewLead/LEAD.md")
+	if err := os.MkdirAll(filepath.Dir(newFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newFile, []byte("---\ntype: Lead\nstatus: new\n---\n# New Lead\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Query without --sync should NOT see the new file
+	out, err := runVaultquery(t, dbPath, vault, "query", `LIST WHERE type = 'Lead'`)
+	if err != nil {
+		t.Fatalf("query failed: %v\n%s", err, out)
+	}
+
+	var result struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if len(result.Results) != 1 {
+		t.Errorf("expected 1 result (no sync), got %d", len(result.Results))
+	}
+
+	// Query with --sync SHOULD see the new file
+	out, err = runVaultquery(t, dbPath, vault, "query", "--sync", `LIST WHERE type = 'Lead'`)
+	if err != nil {
+		t.Fatalf("query --sync failed: %v\n%s", err, out)
+	}
+
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if len(result.Results) != 2 {
+		t.Errorf("expected 2 results (after sync), got %d", len(result.Results))
+	}
+}
+
 func TestE2E_ContainsQuery(t *testing.T) {
 	vault := createTestVault(t)
 	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	if _, err := runVaultquery(t, dbPath, vault, "index"); err != nil {
+		t.Fatalf("index failed: %v", err)
+	}
 
 	out, err := runVaultquery(t, dbPath, vault, "query", `TABLE customer WHERE tags contains 'linux'`)
 	if err != nil {

@@ -52,13 +52,57 @@ func ensureIndex(cmd *cobra.Command) (*index.Store, error) {
 	return store, nil
 }
 
+func openIndex(cmd *cobra.Command) (*index.Store, error) {
+	vaultRoot, dbPath, err := getFlags(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	// If DB doesn't exist yet, do a full sync (first-run)
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return ensureIndex(cmd)
+	}
+
+	store, err := index.Open(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening index: %w", err)
+	}
+
+	// Check if index is empty (first-run after DB created but no data)
+	stats, err := store.Stats()
+	if err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	if stats.FileCount == 0 {
+		_ = store.Close()
+		return ensureIndex(cmd)
+	}
+
+	// Verify vault root matches
+	storedRoot, _ := store.GetMeta("vault_root")
+	if storedRoot != "" && storedRoot != vaultRoot {
+		_ = store.Close()
+		return nil, fmt.Errorf("index was built for vault %q, but current vault is %q; run 'vaultquery reindex'", storedRoot, vaultRoot)
+	}
+
+	return store, nil
+}
+
 func runQuery(cmd *cobra.Command, args []string) error {
 	query, err := dql.Parse(args[0])
 	if err != nil {
 		return fmt.Errorf("parse error: %w", err)
 	}
 
-	store, err := ensureIndex(cmd)
+	syncFlag, _ := cmd.Flags().GetBool("sync")
+
+	var store *index.Store
+	if syncFlag {
+		store, err = ensureIndex(cmd)
+	} else {
+		store, err = openIndex(cmd)
+	}
 	if err != nil {
 		return err
 	}

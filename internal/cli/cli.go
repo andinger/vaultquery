@@ -27,12 +27,14 @@ func NewRootCmd(version, commit, date string) *cobra.Command {
 }
 
 func newQueryCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "query [DQL]",
 		Short: "Execute a DQL query against the vault index",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runQuery,
 	}
+	cmd.Flags().Bool("sync", false, "sync the index before querying")
+	return cmd
 }
 
 func newIndexCmd() *cobra.Command {
