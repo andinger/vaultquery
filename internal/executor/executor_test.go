@@ -68,7 +68,7 @@ func setupTestStore(t *testing.T) *index.Store {
 		t.Fatal(err)
 	}
 
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 	return store
 }
 

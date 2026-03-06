@@ -29,7 +29,7 @@ func (e *Executor) Execute(query *dql.Query) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type fileRow struct {
 		id    int64
@@ -93,7 +93,7 @@ func queryFieldValues(db *sql.DB, fileID int64, key string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var values []string
 	for rows.Next() {

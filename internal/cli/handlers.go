@@ -61,7 +61,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	exec := executor.New(store)
 	result, err := exec.Execute(query)
@@ -80,7 +80,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	stats, err := store.Stats()
 	if err != nil {
@@ -105,7 +105,7 @@ func runReindex(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("opening index: %w", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	if err := store.DropAll(); err != nil {
 		return fmt.Errorf("dropping index: %w", err)
@@ -150,7 +150,7 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("opening index: %w", err)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	stats, err := store.Stats()
 	if err != nil {

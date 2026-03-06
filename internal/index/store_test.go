@@ -10,7 +10,7 @@ func mustOpen(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 	return s
 }
 
@@ -213,8 +213,12 @@ func TestStats(t *testing.T) {
 		t.Fatalf("expected 0 files, got %d", stats.FileCount)
 	}
 
-	s.UpsertFile("a.md", 1, 1, "")
-	s.UpsertFile("b.md", 1, 1, "")
+	if _, err := s.UpsertFile("a.md", 1, 1, ""); err != nil {
+		t.Fatalf("UpsertFile: %v", err)
+	}
+	if _, err := s.UpsertFile("b.md", 1, 1, ""); err != nil {
+		t.Fatalf("UpsertFile: %v", err)
+	}
 
 	stats, err = s.Stats()
 	if err != nil {
@@ -228,8 +232,12 @@ func TestStats(t *testing.T) {
 func TestDropAll(t *testing.T) {
 	s := mustOpen(t)
 
-	s.UpsertFile("a.md", 1, 1, "")
-	s.SetMeta("k", "v")
+	if _, err := s.UpsertFile("a.md", 1, 1, ""); err != nil {
+		t.Fatalf("UpsertFile: %v", err)
+	}
+	if err := s.SetMeta("k", "v"); err != nil {
+		t.Fatalf("SetMeta: %v", err)
+	}
 
 	if err := s.DropAll(); err != nil {
 		t.Fatalf("DropAll: %v", err)

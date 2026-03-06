@@ -90,7 +90,7 @@ func setupTestVault(t *testing.T) (*testVault, *index.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { _ = store.Close() })
 
 	fs := indexer.NewRealFS()
 	idx := indexer.New(store, fs)

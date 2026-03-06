@@ -88,7 +88,7 @@ func (idx *Indexer) Update(root string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// 5. Delete removed files
 	for _, path := range toDelete {

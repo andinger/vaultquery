@@ -17,7 +17,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	binaryPath = filepath.Join(tmp, "vaultquery")
 	cmd := exec.Command("go", "build", "-o", binaryPath, ".")
