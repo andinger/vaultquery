@@ -58,10 +58,6 @@ func applyGroupBy(rows []map[string]any, groupByDefs []dql.FieldDef, ev *eval.Ev
 	// Group by the first GROUP BY expression (Dataview typically uses single GROUP BY)
 	fd := groupByDefs[0]
 	fieldName := dql.FieldDefName(fd)
-	alias := fd.Alias
-	if alias == "" {
-		alias = fieldName
-	}
 
 	groups := make(map[string]*GroupedResult)
 	var order []string

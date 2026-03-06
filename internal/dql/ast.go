@@ -2,16 +2,16 @@ package dql
 
 // Query represents a parsed DQL query.
 type Query struct {
-	Mode      string      // "TABLE", "LIST", "TASK", "CALENDAR"
-	Fields    []FieldDef  // TABLE fields (empty for LIST); expression-based
-	WithoutID bool        // WITHOUT ID clause
-	From      string      // FROM path (empty = all) — simple string for backward compat
-	FromSource FromSource // Rich FROM tree (nil = use From string)
-	Where     Expr        // nil if no WHERE
-	Sort      []SortField // nil if no SORT
-	Limit     int         // 0 = no limit
-	GroupBy   []FieldDef
-	Flatten   []FieldDef
+	Mode       string      // "TABLE", "LIST", "TASK", "CALENDAR"
+	Fields     []FieldDef  // TABLE fields (empty for LIST); expression-based
+	WithoutID  bool        // WITHOUT ID clause
+	From       string      // FROM path (empty = all) — simple string for backward compat
+	FromSource FromSource  // Rich FROM tree (nil = use From string)
+	Where      Expr        // nil if no WHERE
+	Sort       []SortField // nil if no SORT
+	Limit      int         // 0 = no limit
+	GroupBy    []FieldDef
+	Flatten    []FieldDef
 }
 
 // FieldDef represents a field expression with an optional alias.
@@ -141,17 +141,17 @@ type NegationExpr struct {
 	Inner Expr
 }
 
-func (ComparisonExpr) exprNode()    {}
-func (LogicalExpr) exprNode()       {}
-func (ParenExpr) exprNode()         {}
-func (ExistsExpr) exprNode()        {}
-func (LiteralExpr) exprNode()       {}
-func (FieldAccessExpr) exprNode()   {}
-func (FunctionCallExpr) exprNode()  {}
-func (ArithmeticExpr) exprNode()    {}
-func (IndexExpr) exprNode()         {}
-func (LambdaExpr) exprNode()        {}
-func (NegationExpr) exprNode()      {}
+func (ComparisonExpr) exprNode()   {}
+func (LogicalExpr) exprNode()      {}
+func (ParenExpr) exprNode()        {}
+func (ExistsExpr) exprNode()       {}
+func (LiteralExpr) exprNode()      {}
+func (FieldAccessExpr) exprNode()  {}
+func (FunctionCallExpr) exprNode() {}
+func (ArithmeticExpr) exprNode()   {}
+func (IndexExpr) exprNode()        {}
+func (LambdaExpr) exprNode()       {}
+func (NegationExpr) exprNode()     {}
 
 // FieldName returns the dotted field name for a FieldAccessExpr,
 // or the Field string for a ComparisonExpr (for backward compat helpers).

@@ -40,13 +40,13 @@ const (
 	NULL_KW      = "NULL"
 
 	// Operators
-	EQ      = "="
-	NEQ     = "!="
-	LT      = "<"
-	GT      = ">"
-	LTE     = "<="
-	GTE     = ">="
-	BANG    = "!"
+	EQ   = "="
+	NEQ  = "!="
+	LT   = "<"
+	GT   = ">"
+	LTE  = "<="
+	GTE  = ">="
+	BANG = "!"
 
 	// Arithmetic
 	PLUS    = "+"
@@ -71,32 +71,32 @@ const (
 )
 
 var keywords = map[string]string{
-	"table":    TABLE,
-	"list":     LIST,
-	"task":     TASK,
-	"calendar": CALENDAR,
-	"from":     FROM,
-	"where":    WHERE,
-	"sort":     SORT,
-	"limit":    LIMIT,
-	"group":    GROUP,
-	"by":       BY,
-	"flatten":  FLATTEN,
-	"and":      AND,
-	"or":       OR,
-	"not":      NOT,
+	"table":      TABLE,
+	"list":       LIST,
+	"task":       TASK,
+	"calendar":   CALENDAR,
+	"from":       FROM,
+	"where":      WHERE,
+	"sort":       SORT,
+	"limit":      LIMIT,
+	"group":      GROUP,
+	"by":         BY,
+	"flatten":    FLATTEN,
+	"and":        AND,
+	"or":         OR,
+	"not":        NOT,
 	"asc":        ASC,
 	"ascending":  ASC,
 	"desc":       DESC,
 	"descending": DESC,
-	"contains": CONTAINS,
-	"exists":   EXISTS,
-	"as":       AS,
-	"without":  WITHOUT,
-	"id":       ID,
-	"true":     TRUE,
-	"false":    FALSE,
-	"null":     NULL_KW,
+	"contains":   CONTAINS,
+	"exists":     EXISTS,
+	"as":         AS,
+	"without":    WITHOUT,
+	"id":         ID,
+	"true":       TRUE,
+	"false":      FALSE,
+	"null":       NULL_KW,
 }
 
 // Token represents a lexical token.

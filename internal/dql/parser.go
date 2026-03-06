@@ -959,21 +959,6 @@ func (p *parser) parseFromPrimary() (FromSource, error) {
 		return nil, &ParseError{Pos: tok.Pos, Message: fmt.Sprintf("expected FROM source, got %s (%q)", tok.Type, tok.Literal)}
 	}
 }
-
-// splitDotted splits "file.name" into ["file", "name"].
-func splitDotted(s string) []string {
-	var parts []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '.' {
-			parts = append(parts, s[start:i])
-			start = i + 1
-		}
-	}
-	parts = append(parts, s[start:])
-	return parts
-}
-
 // Helper functions for backward compatibility
 
 // FieldDefName returns the simple field name from a FieldDef.

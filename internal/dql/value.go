@@ -50,20 +50,20 @@ func (t ValueType) String() string {
 
 // Value represents a runtime DQL value with a tagged type.
 type Value struct {
-	Type     ValueType
-	Inner    any // float64 | string | bool | time.Time | time.Duration | []Value | map[string]Value
+	Type  ValueType
+	Inner any // float64 | string | bool | time.Time | time.Duration | []Value | map[string]Value
 }
 
 // Constructors
 
-func NewNull() Value                        { return Value{Type: TypeNull} }
-func NewNumber(n float64) Value             { return Value{Type: TypeNumber, Inner: n} }
-func NewString(s string) Value              { return Value{Type: TypeString, Inner: s} }
-func NewBool(b bool) Value                  { return Value{Type: TypeBool, Inner: b} }
-func NewDate(t time.Time) Value             { return Value{Type: TypeDate, Inner: t} }
-func NewDuration(d time.Duration) Value     { return Value{Type: TypeDuration, Inner: d} }
-func NewLink(target string) Value           { return Value{Type: TypeLink, Inner: target} }
-func NewList(items []Value) Value           { return Value{Type: TypeList, Inner: items} }
+func NewNull() Value                          { return Value{Type: TypeNull} }
+func NewNumber(n float64) Value               { return Value{Type: TypeNumber, Inner: n} }
+func NewString(s string) Value                { return Value{Type: TypeString, Inner: s} }
+func NewBool(b bool) Value                    { return Value{Type: TypeBool, Inner: b} }
+func NewDate(t time.Time) Value               { return Value{Type: TypeDate, Inner: t} }
+func NewDuration(d time.Duration) Value       { return Value{Type: TypeDuration, Inner: d} }
+func NewLink(target string) Value             { return Value{Type: TypeLink, Inner: target} }
+func NewList(items []Value) Value             { return Value{Type: TypeList, Inner: items} }
 func NewObject(fields map[string]Value) Value { return Value{Type: TypeObject, Inner: fields} }
 
 // Accessors
