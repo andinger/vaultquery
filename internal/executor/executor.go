@@ -2,7 +2,11 @@ package executor
 
 import (
 	"database/sql"
+	"fmt"
+	"path/filepath"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/andinger/vaultquery/internal/dql"
 	"github.com/andinger/vaultquery/internal/eval"
@@ -83,25 +87,56 @@ func (e *Executor) executePushDown(query *dql.Query) (*Result, error) {
 	if query.Mode == "TABLE" {
 		fieldNames := dql.FieldDefNames(query.Fields)
 		result.Fields = fieldNames
+		exprEval := needsExprEval(query.Fields)
 		for _, f := range files {
 			row := map[string]any{
 				"path":  f.path,
 				"title": f.title,
 			}
-			for i, fd := range query.Fields {
-				key := dql.FieldDefName(fd)
-				displayName := fieldNames[i]
-				values, err := queryFieldValues(db, f.id, key)
+			// If any field needs expression evaluation, build a full eval context
+			var ctx *eval.EvalContext
+			if exprEval {
+				allFields, err := queryAllFields(db, f.id)
 				if err != nil {
 					return nil, err
 				}
-				switch len(values) {
-				case 0:
-					row[displayName] = nil
-				case 1:
-					row[displayName] = values[0]
-				default:
-					row[displayName] = values
+				meta, err := queryFileMeta(db, f.id)
+				if err != nil {
+					return nil, err
+				}
+				ctx = e.buildEvalContext(db, f, allFields, meta)
+			}
+			for i, fd := range query.Fields {
+				displayName := fieldNames[i]
+				if isSimpleFieldDef(fd) && ctx == nil {
+					// Fast path: simple EAV lookup
+					key := dql.FieldDefName(fd)
+					values, err := queryFieldValues(db, f.id, key)
+					if err != nil {
+						return nil, err
+					}
+					switch len(values) {
+					case 0:
+						row[displayName] = nil
+					case 1:
+						row[displayName] = values[0]
+					default:
+						row[displayName] = values
+					}
+				} else {
+					// Expression evaluation path
+					if ctx == nil {
+						allFields, err := queryAllFields(db, f.id)
+						if err != nil {
+							return nil, err
+						}
+						meta, err := queryFileMeta(db, f.id)
+						if err != nil {
+							return nil, err
+						}
+						ctx = e.buildEvalContext(db, f, allFields, meta)
+					}
+					row[displayName] = e.evaluateFieldExpr(fd, ctx)
 				}
 			}
 			result.Results = append(result.Results, row)
@@ -190,25 +225,53 @@ func (e *Executor) executeHybrid(query *dql.Query) (*Result, error) {
 
 	if query.Mode == "TABLE" {
 		fieldNames := dql.FieldDefNames(query.Fields)
+		exprEval := needsExprEval(query.Fields)
 		for _, f := range filtered {
 			row := map[string]any{
 				"path":  f.path,
 				"title": f.title,
 			}
-			for i, fd := range query.Fields {
-				key := dql.FieldDefName(fd)
-				displayName := fieldNames[i]
-				values, err := queryFieldValues(db, f.id, key)
+			var ctx *eval.EvalContext
+			if exprEval {
+				allFields, err := queryAllFields(db, f.id)
 				if err != nil {
 					return nil, err
 				}
-				switch len(values) {
-				case 0:
-					row[displayName] = nil
-				case 1:
-					row[displayName] = values[0]
-				default:
-					row[displayName] = values
+				meta, err := queryFileMeta(db, f.id)
+				if err != nil {
+					return nil, err
+				}
+				ctx = e.buildEvalContext(db, f, allFields, meta)
+			}
+			for i, fd := range query.Fields {
+				displayName := fieldNames[i]
+				if isSimpleFieldDef(fd) && ctx == nil {
+					key := dql.FieldDefName(fd)
+					values, err := queryFieldValues(db, f.id, key)
+					if err != nil {
+						return nil, err
+					}
+					switch len(values) {
+					case 0:
+						row[displayName] = nil
+					case 1:
+						row[displayName] = values[0]
+					default:
+						row[displayName] = values
+					}
+				} else {
+					if ctx == nil {
+						allFields, err := queryAllFields(db, f.id)
+						if err != nil {
+							return nil, err
+						}
+						meta, err := queryFileMeta(db, f.id)
+						if err != nil {
+							return nil, err
+						}
+						ctx = e.buildEvalContext(db, f, allFields, meta)
+					}
+					row[displayName] = e.evaluateFieldExpr(fd, ctx)
 				}
 			}
 			resultRows = append(resultRows, row)
@@ -243,6 +306,17 @@ type fileRow struct {
 }
 
 func (e *Executor) sortRows(db *sql.DB, files []fileRow, sorts []dql.SortField) {
+	// Check if any sort field uses expressions
+	hasExprSort := false
+	for _, sf := range sorts {
+		if sf.Expr != nil {
+			if _, ok := sf.Expr.(dql.FieldAccessExpr); !ok {
+				hasExprSort = true
+				break
+			}
+		}
+	}
+
 	// Pre-fetch sort field values for each file
 	type sortData struct {
 		values []dql.Value
@@ -250,12 +324,37 @@ func (e *Executor) sortRows(db *sql.DB, files []fileRow, sorts []dql.SortField) 
 	data := make([]sortData, len(files))
 	for i, f := range files {
 		vals := make([]dql.Value, len(sorts))
-		for j, sf := range sorts {
-			raw, _ := queryFieldValues(db, f.id, sf.Field)
-			if len(raw) > 0 {
-				vals[j] = dql.CoerceFromString(raw[0])
-			} else {
-				vals[j] = dql.NewNull()
+		if hasExprSort {
+			// Build eval context for expression-based sorting
+			allFields, _ := queryAllFields(db, f.id)
+			meta, _ := queryFileMeta(db, f.id)
+			ctx := e.buildEvalContext(db, f, allFields, meta)
+			for j, sf := range sorts {
+				if sf.Expr != nil {
+					vals[j] = e.eval.Eval(sf.Expr, ctx)
+				} else {
+					raw, _ := queryFieldValues(db, f.id, sf.Field)
+					if len(raw) > 0 {
+						vals[j] = dql.CoerceFromString(raw[0])
+					} else {
+						vals[j] = dql.NewNull()
+					}
+				}
+			}
+		} else {
+			for j, sf := range sorts {
+				field := sf.Field
+				if field == "" && sf.Expr != nil {
+					if fa, ok := sf.Expr.(dql.FieldAccessExpr); ok {
+						field = dql.FieldName(fa.Parts)
+					}
+				}
+				raw, _ := queryFieldValues(db, f.id, field)
+				if len(raw) > 0 {
+					vals[j] = dql.CoerceFromString(raw[0])
+				} else {
+					vals[j] = dql.NewNull()
+				}
 			}
 		}
 		data[i] = sortData{values: vals}
@@ -301,6 +400,120 @@ func queryFieldValues(db *sql.DB, fileID int64, key string) ([]string, error) {
 		values = append(values, v)
 	}
 	return values, rows.Err()
+}
+
+// isSimpleFieldDef returns true if the FieldDef is a plain field access (e.g. "customer" or "file.name"),
+// not a function call, arithmetic, etc.
+func isSimpleFieldDef(fd dql.FieldDef) bool {
+	_, ok := fd.Expr.(dql.FieldAccessExpr)
+	return ok
+}
+
+// needsExprEval returns true if any TABLE field requires Go-side expression evaluation.
+func needsExprEval(fields []dql.FieldDef) bool {
+	for _, fd := range fields {
+		if !isSimpleFieldDef(fd) {
+			return true
+		}
+	}
+	return false
+}
+
+// fileMeta holds metadata from the files table.
+type fileMeta struct {
+	mtime int64
+	ctime int64
+	size  int64
+}
+
+func queryFileMeta(db *sql.DB, fileID int64) (fileMeta, error) {
+	var m fileMeta
+	err := db.QueryRow("SELECT mtime, ctime, size FROM files WHERE id = ?", fileID).Scan(&m.mtime, &m.ctime, &m.size)
+	return m, err
+}
+
+// buildEvalContext creates a full EvalContext for a file, including file.* implicit fields.
+func (e *Executor) buildEvalContext(db *sql.DB, f fileRow, fields map[string][]string, meta fileMeta) *eval.EvalContext {
+	ctx := eval.BuildEvalContextFromEAV(f.path, f.title, fields)
+
+	// Populate file.* implicit fields
+	base := filepath.Base(f.path)
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	folder := filepath.Dir(f.path)
+
+	ctx.Fields["file.path"] = dql.NewString(f.path)
+	ctx.Fields["file.folder"] = dql.NewString(folder)
+	ctx.Fields["file.name"] = dql.NewString(name)
+	ctx.Fields["file.ext"] = dql.NewString(ext)
+	ctx.Fields["file.link"] = dql.NewLink(name)
+	ctx.Fields["file.size"] = dql.NewNumber(float64(meta.size))
+
+	if meta.mtime > 0 {
+		mt := time.Unix(meta.mtime, 0)
+		ctx.Fields["file.mtime"] = dql.NewDate(mt)
+		ctx.Fields["file.mday"] = dql.NewDate(time.Date(mt.Year(), mt.Month(), mt.Day(), 0, 0, 0, 0, mt.Location()))
+	}
+	if meta.ctime > 0 {
+		ct := time.Unix(meta.ctime, 0)
+		ctx.Fields["file.ctime"] = dql.NewDate(ct)
+		ctx.Fields["file.cday"] = dql.NewDate(time.Date(ct.Year(), ct.Month(), ct.Day(), 0, 0, 0, 0, ct.Location()))
+	}
+
+	// file.day — date parsed from filename
+	if d, ok := dql.ParseDateFromFilename(base); ok {
+		ctx.Fields["file.day"] = dql.NewDate(d)
+	}
+
+	return ctx
+}
+
+// evaluateFieldExpr evaluates a single TABLE field expression and returns the display value.
+func (e *Executor) evaluateFieldExpr(fd dql.FieldDef, ctx *eval.EvalContext) any {
+	val := e.eval.Eval(fd.Expr, ctx)
+	if val.IsNull() {
+		return nil
+	}
+	return valueToDisplay(val)
+}
+
+// valueToDisplay converts a dql.Value to a display-friendly string or native type.
+func valueToDisplay(v dql.Value) any {
+	switch v.Type {
+	case dql.TypeString:
+		s, _ := v.AsString()
+		return s
+	case dql.TypeNumber:
+		n, _ := v.AsNumber()
+		if n == float64(int64(n)) {
+			return fmt.Sprintf("%d", int64(n))
+		}
+		return fmt.Sprintf("%g", n)
+	case dql.TypeBool:
+		b, _ := v.AsBool()
+		if b {
+			return "true"
+		}
+		return "false"
+	case dql.TypeDate:
+		d, _ := v.AsDate()
+		return d.Format("2006-01-02T15:04:05")
+	case dql.TypeDuration:
+		d, _ := v.AsDuration()
+		return d.String()
+	case dql.TypeLink:
+		s, _ := v.AsLink()
+		return s
+	case dql.TypeList:
+		items, _ := v.AsList()
+		parts := make([]string, len(items))
+		for i, item := range items {
+			parts[i] = fmt.Sprintf("%v", valueToDisplay(item))
+		}
+		return strings.Join(parts, ", ")
+	default:
+		return fmt.Sprintf("%v", v.Inner)
+	}
 }
 
 func queryAllFields(db *sql.DB, fileID int64) (map[string][]string, error) {
