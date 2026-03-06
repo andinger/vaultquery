@@ -34,6 +34,7 @@ brews:
   - repository:
       owner: andinger
       name: homebrew-vaultquery
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: https://github.com/andinger/vaultquery
     description: Query Obsidian vault files by YAML frontmatter
     license: MIT
