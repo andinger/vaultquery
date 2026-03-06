@@ -15,7 +15,8 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
@@ -28,3 +29,15 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^ci:"
+
+brews:
+  - repository:
+      owner: andinger
+      name: homebrew-vaultquery
+    homepage: https://github.com/andinger/vaultquery
+    description: Query Obsidian vault files by YAML frontmatter
+    license: MIT
+    install: |
+      bin.install "vaultquery"
+    test: |
+      system bin/"vaultquery", "--version"

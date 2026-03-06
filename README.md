@@ -4,6 +4,14 @@ Query Obsidian vault files by YAML frontmatter using a DQL-like query language. 
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew install andinger/vaultquery/vaultquery
+```
+
+### Binary download
+
 Download a binary from [Releases](https://github.com/andinger/vaultquery/releases), or build from source:
 
 ```bash
