@@ -15,7 +15,7 @@ type GroupedResult struct {
 
 // GroupedQueryResult holds results after GROUP BY.
 type GroupedQueryResult struct {
-	Mode   string           `json:"mode"`
-	Fields []string         `json:"fields,omitempty"`
-	Groups []GroupedResult  `json:"groups"`
+	Mode   string          `json:"mode"`
+	Fields []string        `json:"fields,omitempty"`
+	Groups []GroupedResult `json:"groups"`
 }

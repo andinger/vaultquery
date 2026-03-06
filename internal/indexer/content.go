@@ -153,8 +153,8 @@ func ExtractTasks(data []byte) []index.TaskInfo {
 			continue
 		}
 
-		if (strings.HasPrefix(stripped, "- [ ] ") || strings.HasPrefix(stripped, "- [x] ") ||
-			strings.HasPrefix(stripped, "- [X] ")) {
+		if strings.HasPrefix(stripped, "- [ ] ") || strings.HasPrefix(stripped, "- [x] ") ||
+			strings.HasPrefix(stripped, "- [X] ") {
 			completed := stripped[3] == 'x' || stripped[3] == 'X'
 			text := strings.TrimSpace(stripped[6:])
 			tasks = append(tasks, index.TaskInfo{

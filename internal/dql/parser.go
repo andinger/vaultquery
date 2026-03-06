@@ -959,6 +959,7 @@ func (p *parser) parseFromPrimary() (FromSource, error) {
 		return nil, &ParseError{Pos: tok.Pos, Message: fmt.Sprintf("expected FROM source, got %s (%q)", tok.Type, tok.Literal)}
 	}
 }
+
 // Helper functions for backward compatibility
 
 // FieldDefName returns the simple field name from a FieldDef.
