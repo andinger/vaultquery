@@ -6,12 +6,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/andinger/vaultquery/internal/config"
 	"github.com/andinger/vaultquery/internal/dql"
 	"github.com/andinger/vaultquery/internal/executor"
 	"github.com/andinger/vaultquery/internal/index"
 	"github.com/andinger/vaultquery/internal/indexer"
-	"github.com/spf13/cobra"
 )
 
 func getFlags(cmd *cobra.Command) (vaultRoot, dbPath string, err error) {
