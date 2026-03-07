@@ -212,21 +212,27 @@ go build ./cmd/vaultquery
 goreleaser build --snapshot --clean
 ```
 
-## Comparison with Obsidian MCP Server
+## Comparison with Obsidian MCP
 
-| | vaultquery | Obsidian MCP Server |
+Obsidian MCP plugins like [obsidian-connect-mcp](https://github.com/joch/obsidian-connect-mcp) give LLM agents direct access to a running Obsidian instance — including Dataview queries, vault search, and structured JSON output. If you already have Obsidian running, they're an excellent choice for agent workflows.
+
+vaultquery fills a different niche: it works **without Obsidian** and runs as a standalone CLI.
+
+| | vaultquery | Obsidian MCP |
 |---|---|---|
 | **Requires Obsidian** | No — headless, works on any `.md` vault | Yes — needs a running Obsidian instance |
-| **Structured output** | JSON and TOON with typed frontmatter fields | Unstructured text |
+| **Query language** | DQL (Dataview-compatible subset) | Dataview queries (via Obsidian plugin) |
+| **Output** | JSON and TOON | JSON |
 | **Scriptable** | CLI tool, pipes into `jq`, shell scripts, CI | Designed for LLM tool-use via MCP |
-| **Query language** | DQL (Dataview-compatible subset) | Natural language via LLM |
 | **Index** | SQLite, incremental mtime+size sync | Obsidian's internal index |
 
-vaultquery is designed for automation, scripting, and headless environments where Obsidian is not installed or running.
+Use vaultquery when you need automation, scripting, CI pipelines, or headless environments where Obsidian is not installed or running. Use Obsidian MCP when you already have Obsidian open and want the richest possible integration.
 
 ## Acknowledgements
 
-vaultquery is heavily inspired by the [Dataview](https://github.com/blacksmithgu/obsidian-dataview) plugin for Obsidian by Michael Brenan. Dataview's query language (DQL) and its approach to treating frontmatter as queryable data were the foundation for this tool. Thank you for creating such a brilliant plugin.
+- [Dataview](https://github.com/blacksmithgu/obsidian-dataview) by Michael Brenan — Dataview's query language (DQL) and its approach to treating frontmatter as queryable data were the foundation for this tool.
+- [Obsidian](https://obsidian.md) — the knowledge base that makes all of this worth building.
+- [obsidian-connect-mcp](https://github.com/joch/obsidian-connect-mcp) by Jonas Chodorski — a great MCP server for connecting LLM agents directly to a running Obsidian instance.
 
 ## License
 
