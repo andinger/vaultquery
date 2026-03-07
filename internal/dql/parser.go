@@ -16,9 +16,12 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("parse error at position %d: %s", e.Pos, e.Message)
 }
 
+const maxParseDepth = 128
+
 type parser struct {
 	tokens []Token
 	pos    int
+	depth  int
 }
 
 // Parse lexes and parses a DQL query string.
@@ -40,7 +43,7 @@ func (p *parser) peek() Token {
 
 func (p *parser) peekAt(offset int) Token {
 	pos := p.pos + offset
-	if pos >= len(p.tokens) {
+	if pos < 0 || pos >= len(p.tokens) {
 		return Token{Type: EOF, Pos: -1}
 	}
 	return p.tokens[pos]
@@ -61,6 +64,18 @@ func (p *parser) expect(tokType string) (Token, error) {
 		}
 	}
 	return tok, nil
+}
+
+func (p *parser) enterDepth() error {
+	p.depth++
+	if p.depth > maxParseDepth {
+		return &ParseError{Pos: p.peek().Pos, Message: "maximum nesting depth exceeded"}
+	}
+	return nil
+}
+
+func (p *parser) leaveDepth() {
+	p.depth--
 }
 
 func (p *parser) parseQuery() (*Query, error) {
@@ -444,6 +459,10 @@ func (p *parser) parseAtomExpr() (Expr, error) {
 		return FieldAccessExpr{Parts: []string{tok.Literal}}, nil
 	case LPAREN:
 		// Could be parenthesized expression or lambda
+		if err := p.enterDepth(); err != nil {
+			return nil, err
+		}
+		defer p.leaveDepth()
 		saved := p.pos
 		p.advance()
 		// Try lambda: (x) => expr or (x, y) => expr
@@ -605,6 +624,10 @@ func (p *parser) parsePrimary() (Expr, error) {
 	tok := p.peek()
 
 	if tok.Type == LPAREN {
+		if err := p.enterDepth(); err != nil {
+			return nil, err
+		}
+		defer p.leaveDepth()
 		p.advance()
 		expr, err := p.parseExpr()
 		if err != nil {

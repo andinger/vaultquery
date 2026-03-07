@@ -1,6 +1,7 @@
 package dql
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -785,5 +786,38 @@ func TestParseWhereWithBoolLiterals(t *testing.T) {
 	}
 	if cmp.Value != "true" {
 		t.Errorf("expected value 'true', got %q", cmp.Value)
+	}
+}
+
+func TestParseDepthLimitExceeded(t *testing.T) {
+	// 200 levels of nesting should exceed maxParseDepth (128)
+	nested := strings.Repeat("(", 200) + "x = 1" + strings.Repeat(")", 200)
+	_, err := Parse("TABLE foo WHERE " + nested)
+	if err == nil {
+		t.Fatal("expected error for deeply nested expression")
+	}
+	pe, ok := err.(*ParseError)
+	if !ok {
+		t.Fatalf("expected *ParseError, got %T", err)
+	}
+	if !strings.Contains(pe.Message, "nesting depth") {
+		t.Errorf("unexpected error message: %s", pe.Message)
+	}
+}
+
+func TestPeekAtNegativeOffset(t *testing.T) {
+	p := &parser{tokens: []Token{{Type: IDENT, Literal: "x", Pos: 0}}, pos: 0}
+	tok := p.peekAt(-1)
+	if tok.Type != EOF {
+		t.Errorf("expected EOF for negative offset, got %s", tok.Type)
+	}
+}
+
+func TestParseModerateNestingSucceeds(t *testing.T) {
+	// 50 levels should be fine
+	nested := strings.Repeat("(", 50) + "x = 1" + strings.Repeat(")", 50)
+	_, err := Parse("TABLE foo WHERE " + nested)
+	if err != nil {
+		t.Fatalf("unexpected error for moderate nesting: %v", err)
 	}
 }
