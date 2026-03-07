@@ -156,8 +156,20 @@ results [
 |---|---|---|
 | **Ecosystem** | Universal, supported everywhere | Newer, lightweight |
 | **Readability** | Verbose (colons, commas, quoting) | Minimal syntax, easy to scan |
+| **Token efficiency** | High overhead from punctuation | ~20-30% fewer tokens |
 | **Tooling** | `jq`, every language | Growing, Go library available |
-| **Best for** | Pipelines, API integration | Human review, config files |
+| **Best for** | Pipelines, API integration | LLM/agent consumption, human review |
+
+### Why TOON is ideal for agentic workflows
+
+When an LLM agent calls vaultquery as a tool, the output is fed back into the model's context window. TOON's minimal syntax — no commas, no colons, no redundant quoting — means the same data uses significantly fewer tokens than JSON. In practice this translates to:
+
+- **More results per context window** — agents can retrieve larger datasets without hitting token limits
+- **Lower cost** — fewer input tokens per tool call directly reduces API spend on token-priced models
+- **Faster responses** — less input to process means lower latency for the agent's next reasoning step
+- **Equally parseable** — LLMs read TOON at least as reliably as JSON; the structure is unambiguous and whitespace-delimited
+
+If you're building an agent that queries an Obsidian vault (e.g. via MCP tool-use, Claude Code, or any LLM-driven pipeline), `--format toon` is the recommended output format. See the [TOON specification](https://github.com/toon-format/toon) for detailed benchmarks and design rationale.
 
 ## Frontmatter
 
