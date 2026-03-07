@@ -1,6 +1,9 @@
 package index
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 const schema = `
 CREATE TABLE IF NOT EXISTS files (
@@ -65,8 +68,11 @@ func migrate(db *sql.DB) error {
 		"ALTER TABLE files ADD COLUMN ctime INTEGER NOT NULL DEFAULT 0",
 	}
 	for _, m := range migrations {
-		// Ignore errors (column already exists, etc.)
-		_, _ = db.Exec(m)
+		if _, err := db.Exec(m); err != nil {
+			if !strings.Contains(err.Error(), "duplicate column") {
+				return err
+			}
+		}
 	}
 
 	// Create tables that may not exist in older databases

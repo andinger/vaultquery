@@ -2,6 +2,8 @@ package indexer
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -223,5 +225,47 @@ func TestVaultqueryDirAlwaysExcluded(t *testing.T) {
 	}
 	if files[0].Path != "a.md" {
 		t.Errorf("expected a.md, got %s", files[0].Path)
+	}
+}
+
+func TestSymlinksSkipped(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a real .md file inside the vault
+	vaultDir := filepath.Join(tmpDir, "vault")
+	if err := os.MkdirAll(vaultDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	realFile := filepath.Join(vaultDir, "real.md")
+	if err := os.WriteFile(realFile, []byte("---\ntitle: Real\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a file outside the vault and symlink it in
+	outsideFile := filepath.Join(tmpDir, "outside.md")
+	if err := os.WriteFile(outsideFile, []byte("---\ntitle: Outside\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlinkPath := filepath.Join(vaultDir, "linked.md")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Skip("symlinks not supported on this platform")
+	}
+
+	store := setupStore(t)
+	realFS := NewRealFS()
+	idx := New(store, realFS, nopLogger, nil)
+	if err := idx.Update(vaultDir); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := store.ListFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file (symlink skipped), got %d", len(files))
+	}
+	if files[0].Path != "real.md" {
+		t.Errorf("expected real.md, got %s", files[0].Path)
 	}
 }

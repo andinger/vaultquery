@@ -259,3 +259,11 @@ func TestDropAll(t *testing.T) {
 		t.Fatalf("expected empty meta after drop, got %q", val)
 	}
 }
+
+func TestMigrateIdempotent(t *testing.T) {
+	s := mustOpen(t)
+	// Running migrate again should not error (columns already exist)
+	if err := migrate(s.DB()); err != nil {
+		t.Fatalf("second migrate failed: %v", err)
+	}
+}

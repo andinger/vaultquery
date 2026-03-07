@@ -50,6 +50,11 @@ func (idx *Indexer) Update(root string) error {
 			return err
 		}
 
+		// Skip symlinks to prevent following links outside the vault boundary
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+
 		rel, relErr := filepath.Rel(root, path)
 		if relErr != nil {
 			return relErr

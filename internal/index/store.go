@@ -2,6 +2,7 @@ package index
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -265,7 +266,7 @@ func setTasks(q querier, fileID int64, tasks []TaskInfo) error {
 // DropAll drops all tables and recreates the schema.
 func (s *Store) DropAll() error {
 	for _, table := range []string{"tasks", "links", "tags", "fields", "files", "meta"} {
-		if _, err := s.db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
+		if _, err := s.db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %q", table)); err != nil {
 			return err
 		}
 	}
