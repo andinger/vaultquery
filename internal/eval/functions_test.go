@@ -1,6 +1,7 @@
 package eval
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/andinger/vaultquery/internal/dql"
@@ -412,5 +413,127 @@ func TestFnSlice(t *testing.T) {
 	items, ok := v.AsList()
 	if !ok || len(items) != 2 {
 		t.Errorf("expected 2 items, got %v", v)
+	}
+}
+
+func TestFnPadleftCapsWidth(t *testing.T) {
+	ev := setupEval()
+	ctx := testCtx()
+
+	// Huge width is capped at maxPadWidth
+	v := ev.Eval(dql.FunctionCallExpr{
+		Name: "padleft",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString("x")},
+			dql.LiteralExpr{Val: dql.NewNumber(99999999)},
+		},
+	}, ctx)
+	s, ok := v.AsString()
+	if !ok {
+		t.Fatal("expected string")
+	}
+	if len(s) > maxPadWidth+1 {
+		t.Errorf("padleft exceeded cap: len=%d", len(s))
+	}
+}
+
+func TestFnPadleftEmptyPadDefaultsToSpace(t *testing.T) {
+	ev := setupEval()
+	ctx := testCtx()
+
+	v := ev.Eval(dql.FunctionCallExpr{
+		Name: "padleft",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString("x")},
+			dql.LiteralExpr{Val: dql.NewNumber(5)},
+			dql.LiteralExpr{Val: dql.NewString("")},
+		},
+	}, ctx)
+	s, ok := v.AsString()
+	if !ok {
+		t.Fatal("expected string")
+	}
+	if s != "    x" {
+		t.Errorf("expected %q, got %q", "    x", s)
+	}
+}
+
+func TestFnPadrightCapsWidth(t *testing.T) {
+	ev := setupEval()
+	ctx := testCtx()
+
+	v := ev.Eval(dql.FunctionCallExpr{
+		Name: "padright",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString("x")},
+			dql.LiteralExpr{Val: dql.NewNumber(99999999)},
+		},
+	}, ctx)
+	s, ok := v.AsString()
+	if !ok {
+		t.Fatal("expected string")
+	}
+	if len(s) > maxPadWidth+1 {
+		t.Errorf("padright exceeded cap: len=%d", len(s))
+	}
+}
+
+func TestRegexOversizedPatternReturnsNullOrFalse(t *testing.T) {
+	ev := setupEval()
+	ctx := testCtx()
+
+	bigPattern := strings.Repeat("a", maxRegexPatternLen+1)
+
+	// regextest returns false
+	v := ev.Eval(dql.FunctionCallExpr{
+		Name: "regextest",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString(bigPattern)},
+			dql.LiteralExpr{Val: dql.NewString("aaa")},
+		},
+	}, ctx)
+	if b, ok := v.AsBool(); !ok || b {
+		t.Errorf("regextest: expected false, got %v", v)
+	}
+
+	// regexmatch returns null
+	v = ev.Eval(dql.FunctionCallExpr{
+		Name: "regexmatch",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString(bigPattern)},
+			dql.LiteralExpr{Val: dql.NewString("aaa")},
+		},
+	}, ctx)
+	if !v.IsNull() {
+		t.Errorf("regexmatch: expected null, got %v", v)
+	}
+
+	// regexreplace returns null
+	v = ev.Eval(dql.FunctionCallExpr{
+		Name: "regexreplace",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString("aaa")},
+			dql.LiteralExpr{Val: dql.NewString(bigPattern)},
+			dql.LiteralExpr{Val: dql.NewString("b")},
+		},
+	}, ctx)
+	if !v.IsNull() {
+		t.Errorf("regexreplace: expected null, got %v", v)
+	}
+}
+
+func TestRegexNormalPatternStillWorks(t *testing.T) {
+	ev := setupEval()
+	ctx := testCtx()
+
+	v := ev.Eval(dql.FunctionCallExpr{
+		Name: "regextest",
+		Args: []dql.Expr{
+			dql.LiteralExpr{Val: dql.NewString(`\d+`)},
+			dql.LiteralExpr{Val: dql.NewString("abc123")},
+		},
+	}, ctx)
+	if b, ok := v.AsBool(); !ok || !b {
+		t.Errorf("expected true, got %v", v)
 	}
 }

@@ -10,6 +10,11 @@ import (
 	"github.com/andinger/vaultquery/internal/dql"
 )
 
+const (
+	maxPadWidth        = 10_000
+	maxRegexPatternLen = 10_240
+)
+
 // RegisterBuiltins adds all built-in DQL functions to the evaluator.
 func RegisterBuiltins(ev *Evaluator) {
 	// Constructors
@@ -599,6 +604,9 @@ func fnRegextest(args []dql.Value, _ *EvalContext) dql.Value {
 	if !ok {
 		return dql.NewBool(false)
 	}
+	if len(pattern) > maxRegexPatternLen {
+		return dql.NewBool(false)
+	}
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return dql.NewBool(false)
@@ -616,6 +624,9 @@ func fnRegexmatch(args []dql.Value, _ *EvalContext) dql.Value {
 	}
 	s, ok := args[1].AsString()
 	if !ok {
+		return dql.NewNull()
+	}
+	if len(pattern) > maxRegexPatternLen {
 		return dql.NewNull()
 	}
 	re, err := regexp.Compile(pattern)
@@ -647,6 +658,9 @@ func fnRegexreplace(args []dql.Value, _ *EvalContext) dql.Value {
 	}
 	repl, ok := args[2].AsString()
 	if !ok {
+		return dql.NewNull()
+	}
+	if len(pattern) > maxRegexPatternLen {
 		return dql.NewNull()
 	}
 	re, err := regexp.Compile(pattern)
@@ -758,11 +772,15 @@ func fnPadleft(args []dql.Value, _ *EvalContext) dql.Value {
 	}
 	pad := " "
 	if len(args) > 2 {
-		if p, ok := args[2].AsString(); ok {
+		if p, ok := args[2].AsString(); ok && p != "" {
 			pad = p
 		}
 	}
-	for len(s) < int(width) {
+	w := int(width)
+	if w > maxPadWidth {
+		w = maxPadWidth
+	}
+	for len(s) < w {
 		s = pad + s
 	}
 	return dql.NewString(s)
@@ -779,11 +797,15 @@ func fnPadright(args []dql.Value, _ *EvalContext) dql.Value {
 	}
 	pad := " "
 	if len(args) > 2 {
-		if p, ok := args[2].AsString(); ok {
+		if p, ok := args[2].AsString(); ok && p != "" {
 			pad = p
 		}
 	}
-	for len(s) < int(width) {
+	w := int(width)
+	if w > maxPadWidth {
+		w = maxPadWidth
+	}
+	for len(s) < w {
 		s = s + pad
 	}
 	return dql.NewString(s)

@@ -67,6 +67,8 @@ func TestParseDuration(t *testing.T) {
 		{"1 month", 30 * 24 * time.Hour, true},
 		{"30s", 30 * time.Second, true},
 		{"5m", 5 * time.Minute, true},
+		{"100 years", 100 * 365 * 24 * time.Hour, true},
+		{"999999999999 years", 0, false},
 		{"", 0, false},
 		{"abc", 0, false},
 	}

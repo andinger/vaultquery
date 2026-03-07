@@ -58,7 +58,7 @@ func ParseDuration(s string) (time.Duration, bool) {
 	var total time.Duration
 	for _, m := range matches {
 		n, err := strconv.Atoi(m[1])
-		if err != nil {
+		if err != nil || n > 1_000_000 {
 			continue
 		}
 		unit := strings.ToLower(m[2])
