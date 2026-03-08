@@ -7,7 +7,7 @@ Query Obsidian vault files by YAML frontmatter using a DQL-like query language. 
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install andinger/vaultquery/vaultquery
+brew install andinger/tap/vaultquery
 ```
 
 ### Binary download
@@ -21,26 +21,160 @@ go install github.com/andinger/vaultquery/cmd/vaultquery@latest
 ## Usage
 
 ```bash
-# Index the vault (run from vault root, or use --vault)
-vaultquery index --vault ~/my-vault
+# Query with DQL (auto-syncs index before each query)
+vaultquery query "TABLE customer, status FROM \"Clients\" WHERE type = \"Lead\" SORT customer ASC" --vault ~/my-vault
 
-# Query with DQL
-vaultquery query "TABLE customer, kubectl_context WHERE type = 'Kubernetes Cluster' SORT customer ASC"
+# List all files with a specific tag
+vaultquery query "LIST FROM #project WHERE status != \"archived\"" --vault ~/my-vault
 
-# List all leads that aren't lost
-vaultquery query "LIST FROM \"Sales\" WHERE type = 'Lead' AND status != 'lost'"
+# Find files linking to a specific page
+vaultquery query "TABLE file.name FROM [[My Note]]" --vault ~/my-vault
 
-# Find files with a specific tag
-vaultquery query "TABLE customer WHERE tags contains 'linux'"
-
-# Check index status
-vaultquery status
-
-# Full reindex (drop + rebuild)
-vaultquery reindex --vault ~/my-vault
+# TOON output (recommended for LLM/agent workflows)
+vaultquery query "TABLE customer WHERE type = \"Server\"" --vault ~/my-vault --format toon
 ```
 
 Every `query` command automatically syncs the index before executing (incremental, mtime+size based). Pass `--index-only` to skip syncing and use the existing index as-is.
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `vaultquery query "<DQL>"` | Execute a DQL query against the vault |
+| `vaultquery index` | Build or update the vault index (incremental) |
+| `vaultquery reindex` | Drop and rebuild the vault index from scratch |
+| `vaultquery status` | Show index status (file count, vault path) |
+| `vaultquery reference` | Print the full reference documentation to stdout |
+
+### Options
+
+| Flag | Applies to | Description | Default |
+|---|---|---|---|
+| `--vault <PATH>` | all | Vault root directory | current directory |
+| `--format <FORMAT>` | query | Output format: `json` or `toon` | from config or `json` |
+| `-v, --verbose` | all | Show detailed progress during indexing | off |
+| `--index-only` | query | Skip index sync, use existing index as-is | off |
+
+## Built-in reference
+
+vaultquery ships with a comprehensive reference document embedded in the binary. This reference covers the full DQL syntax, all built-in functions, `file.*` metadata fields, shell quoting rules, and usage examples.
+
+The reference is designed as a machine-readable context file for AI coding assistants. Instead of each assistant session interpreting the tool's behavior on its own, every instance gets the exact same canonical documentation — matched to the installed version.
+
+```bash
+# Print reference to stdout
+vaultquery reference
+
+# Create a local reference file (e.g. for Claude Code)
+vaultquery reference > ~/.claude/references/vaultquery.md
+
+# Update after upgrading vaultquery
+brew upgrade vaultquery && vaultquery reference > ~/.claude/references/vaultquery.md
+```
+
+The reference is rebuilt with each release, so re-running the command after an upgrade keeps your local copy in sync.
+
+## Shell quoting
+
+DQL uses double quotes for string values and folder paths. **Always use double-quoted shell strings with escaped inner quotes:**
+
+```bash
+# CORRECT — double quotes with escaped inner quotes
+vaultquery query "TABLE customer WHERE type = \"System\"" --vault ~/base
+
+# CORRECT — no inner quotes needed
+vaultquery query "LIST FROM #project" --vault ~/base
+
+# WRONG — single quotes break negation (!) in zsh (BANG_HIST)
+vaultquery query 'TABLE x WHERE status != "done"'
+```
+
+## DQL overview
+
+### Query types
+
+| Type | Description |
+|---|---|
+| `TABLE field1, field2, ...` | Tabular output with specified frontmatter fields |
+| `LIST [expression]` | List of file links with optional expression |
+| `TASK` | Task items (`- [ ]` / `- [x]`) from file content |
+| `CALENDAR <date-field>` | Calendar view grouped by date |
+
+### FROM sources
+
+```
+FROM "folder/path"              # Folder
+FROM #tag                       # Tag
+FROM [[link]]                   # Backlinks to page
+FROM outgoing([[link]])         # Outgoing links from page
+FROM #tag AND "folder"          # Boolean combination
+FROM #tag OR #other-tag
+FROM !#excluded                 # Negation
+```
+
+### WHERE operators
+
+| Operator | Example |
+|---|---|
+| `=`, `!=` | `status = "active"`, `type != "archived"` |
+| `<`, `>`, `<=`, `>=` | `rating >= 4` |
+| `contains`, `!contains` | `tags contains "linux"` |
+| `exists`, `!exists` | `kubectl_context exists` |
+| `AND`, `OR`, `(...)` | `(type = "Server" OR type = "Cluster") AND status = "active"` |
+
+### Clauses
+
+```
+SORT due ASC                    # Sort (ASC or DESC)
+SORT status DESC, due ASC       # Multi-field sort
+LIMIT 10                        # Limit results
+GROUP BY status                 # Group results
+FLATTEN tags                    # Flatten array fields into rows
+WITHOUT ID                      # Omit file link column
+```
+
+### Expressions and aliases
+
+```
+TABLE status, due, file.name
+TABLE (due - date(today)) AS "Days Left"
+TABLE choice(status = "done", "Y", "N") AS Done
+```
+
+### file.* metadata fields
+
+Every indexed file exposes metadata via `file.*`:
+
+| Field | Description |
+|---|---|
+| `file.name` | Filename without extension |
+| `file.folder` | Parent folder path |
+| `file.path` | Full relative path |
+| `file.link` | Link to the file |
+| `file.size` | File size in bytes |
+| `file.ctime` / `file.cday` | Creation time / date |
+| `file.mtime` / `file.mday` | Modification time / date |
+| `file.day` | Date parsed from filename (e.g. `2026-03-06.md`) |
+| `file.tags` / `file.etags` | All tags / explicit tags |
+| `file.inlinks` / `file.outlinks` | Incoming / outgoing links |
+| `file.aliases` | Aliases from frontmatter |
+| `file.frontmatter` | All frontmatter as object |
+
+### Built-in functions
+
+**Constructors:** `date()`, `dur()`, `number()`, `string()`, `link()`, `list()`, `object()`, `typeof()`
+
+**Numeric:** `round()`, `floor()`, `ceil()`, `min()`, `max()`, `sum()`, `product()`, `average()`, `minby()`, `maxby()`
+
+**Arrays:** `contains()`, `icontains()`, `econtains()`, `length()`, `sort()`, `reverse()`, `flat()`, `slice()`, `unique()`, `join()`, `nonnull()`, `all()`, `any()`, `none()`
+
+**Strings:** `lower()`, `upper()`, `split()`, `replace()`, `startswith()`, `endswith()`, `substring()`, `truncate()`, `padleft()`, `padright()`, `regextest()`, `regexmatch()`, `regexreplace()`
+
+**Utility:** `default()`, `choice()`, `dateformat()`, `durationformat()`, `striptime()`, `meta()`, `currencyformat()`
+
+**Lambda support:** `all(list, (x) => cond)`, `any(list, (x) => cond)`, `none(list, (x) => cond)`
+
+For full function signatures and detailed syntax, run `vaultquery reference`.
 
 ## Vault-local storage
 
@@ -71,47 +205,7 @@ exclude:
 
 Paths are relative to the vault root. Matching is prefix-based (e.g. `Archive/Old` excludes everything under that path). The `.vaultquery` directory itself is always excluded.
 
-## DQL Reference
-
-### Query Modes
-
-| Mode | Description |
-|------|-------------|
-| `TABLE field1, field2, ...` | Returns specified frontmatter fields |
-| `LIST` | Returns only path and title |
-
-### Clauses
-
-| Clause | Description | Example |
-|--------|-------------|---------|
-| `FROM "path"` | Filter by vault subdirectory | `FROM "Clients"` |
-| `WHERE expr` | Filter by field conditions | `WHERE type = 'Server'` |
-| `SORT field [ASC\|DESC]` | Sort results | `SORT customer ASC` |
-| `LIMIT n` | Limit result count | `LIMIT 10` |
-| `GROUP BY field` | Group results | `GROUP BY customer` |
-| `FLATTEN field` | Flatten array fields | `FLATTEN tags` |
-
-### WHERE Operators
-
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `=` | Equals | `status = 'active'` |
-| `!=` | Not equals | `status != 'lost'` |
-| `<`, `>`, `<=`, `>=` | Comparison | `value > '1000'` |
-| `contains` | Array contains value | `tags contains 'linux'` |
-| `!contains` | Array doesn't contain | `tags !contains 'deprecated'` |
-| `exists` | Field exists | `kubectl_context exists` |
-| `!exists` | Field doesn't exist | `notes !exists` |
-
-### Logical Operators
-
-Combine conditions with `AND`, `OR`, and parentheses:
-
-```
-WHERE (type = 'Server' OR type = 'Cluster') AND status = 'active'
-```
-
-## Output
+## Output formats
 
 Default output is JSON:
 
@@ -189,15 +283,6 @@ tags:
 - All top-level fields are indexed
 - Arrays are stored as separate rows (enabling `contains` queries)
 - The title is extracted from the first `# heading` after frontmatter
-
-## Configuration
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--vault` | Current directory | Vault root path |
-| `-v, --verbose` | false | Show detailed progress during indexing |
-| `--format` | `json` | Output format: `json` or `toon` (query only, overrides config) |
-| `--index-only` | false | Skip index sync, use existing index as-is (query only) |
 
 ## Development
 

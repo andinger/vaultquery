@@ -21,6 +21,7 @@ func NewRootCmd(version, commit, date string) *cobra.Command {
 		newIndexCmd(),
 		newReindexCmd(),
 		newStatusCmd(),
+		newReferenceCmd(),
 	)
 
 	root.PersistentFlags().String("vault", "", "path to vault root (default: current directory)")
