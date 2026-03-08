@@ -639,8 +639,8 @@ func (p *parser) parsePrimary() (Expr, error) {
 		return ParenExpr{Inner: expr}, nil
 	}
 
-	// Handle negation: !expr or !contains(...)
-	if tok.Type == BANG {
+	// Handle negation: !expr, NOT expr, or !contains(...)
+	if tok.Type == BANG || tok.Type == NOT {
 		p.advance()
 		inner, err := p.parsePrimary()
 		if err != nil {

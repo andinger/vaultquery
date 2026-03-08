@@ -188,6 +188,13 @@ func Lex(input string) ([]Token, error) {
 			lit := input[pos:i]
 			tokType := LookupIdent(lit)
 			tokens = append(tokens, Token{Type: tokType, Literal: lit, Pos: pos})
+		case ch == '\\':
+			// Handle shell-escaped ! (e.g., zsh BANG_HIST: \!= becomes !=)
+			if i+1 < len(input) && input[i+1] == '!' {
+				i++ // skip the backslash, let the next iteration handle !
+			} else {
+				return nil, fmt.Errorf("unexpected character at position %d: %q", i, string(ch))
+			}
 		default:
 			return nil, fmt.Errorf("unexpected character at position %d: %q", i, string(ch))
 		}

@@ -284,6 +284,85 @@ func TestLexPunctuation(t *testing.T) {
 	}
 }
 
+func TestLexBackslashBang(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantToks []struct {
+			typ string
+			lit string
+		}
+		wantErr bool
+	}{
+		{
+			name:  "backslash-bang-equals becomes NEQ",
+			input: `\!=`,
+			wantToks: []struct {
+				typ string
+				lit string
+			}{
+				{NEQ, "!="},
+				{EOF, ""},
+			},
+		},
+		{
+			name:  "backslash-bang-paren becomes BANG LPAREN",
+			input: `\!(`,
+			wantToks: []struct {
+				typ string
+				lit string
+			}{
+				{BANG, "!"},
+				{LPAREN, "("},
+				{EOF, ""},
+			},
+		},
+		{
+			name:  "backslash-bang-contains becomes NOT_CONTAINS",
+			input: `\!contains`,
+			wantToks: []struct {
+				typ string
+				lit string
+			}{
+				{NOT_CONTAINS, "!contains"},
+				{EOF, ""},
+			},
+		},
+		{
+			name:    "lone backslash errors",
+			input:   `\`,
+			wantErr: true,
+		},
+		{
+			name:    "backslash not followed by bang errors",
+			input:   `\a`,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tokens, err := Lex(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(tokens) != len(tt.wantToks) {
+				t.Fatalf("expected %d tokens, got %d: %v", len(tt.wantToks), len(tokens), tokens)
+			}
+			for i, e := range tt.wantToks {
+				if tokens[i].Type != e.typ || tokens[i].Literal != e.lit {
+					t.Errorf("token %d: expected {%s %q}, got {%s %q}", i, e.typ, e.lit, tokens[i].Type, tokens[i].Literal)
+				}
+			}
+		})
+	}
+}
+
 func TestLexPositionTracking(t *testing.T) {
 	tokens, err := Lex("TABLE name")
 	if err != nil {

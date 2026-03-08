@@ -695,6 +695,62 @@ func TestParseNegatedContainsInWhere(t *testing.T) {
 	}
 }
 
+func TestParseNOTKeywordInWhere(t *testing.T) {
+	// WHERE NOT type = "Foo" should produce NegationExpr{ComparisonExpr{...}}
+	q, err := Parse(`TABLE name WHERE NOT type = "Foo"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	neg, ok := q.Where.(NegationExpr)
+	if !ok {
+		t.Fatalf("expected NegationExpr, got %T", q.Where)
+	}
+	cmp, ok := neg.Inner.(ComparisonExpr)
+	if !ok {
+		t.Fatalf("expected ComparisonExpr inside negation, got %T", neg.Inner)
+	}
+	if cmp.Field != "type" || cmp.Op != "=" || cmp.Value != "Foo" {
+		t.Errorf("unexpected comparison: %+v", cmp)
+	}
+}
+
+func TestParseNOTContainsInWhere(t *testing.T) {
+	// WHERE NOT contains(tags, "x") should produce NegationExpr{FunctionCallExpr{...}}
+	q, err := Parse(`LIST WHERE NOT contains(tags, "x")`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	neg, ok := q.Where.(NegationExpr)
+	if !ok {
+		t.Fatalf("expected NegationExpr, got %T", q.Where)
+	}
+	fc, ok := neg.Inner.(FunctionCallExpr)
+	if !ok {
+		t.Fatalf("expected FunctionCallExpr inside negation, got %T", neg.Inner)
+	}
+	if fc.Name != "contains" {
+		t.Errorf("expected 'contains', got %q", fc.Name)
+	}
+	if len(fc.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(fc.Args))
+	}
+}
+
+func TestParseBackslashBangInQuery(t *testing.T) {
+	// Simulates zsh BANG_HIST escaping: \!= should parse as !=
+	q, err := Parse(`TABLE name WHERE type \!= "System"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmp, ok := q.Where.(ComparisonExpr)
+	if !ok {
+		t.Fatalf("expected ComparisonExpr, got %T", q.Where)
+	}
+	if cmp.Op != "!=" {
+		t.Errorf("expected op '!=', got %q", cmp.Op)
+	}
+}
+
 func TestParseContainsFunctionCallInWhere(t *testing.T) {
 	q, err := Parse(`LIST WHERE contains(file.folder, "Clients")`)
 	if err != nil {
