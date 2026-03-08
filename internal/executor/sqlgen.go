@@ -115,11 +115,32 @@ func buildWhere(expr dql.Expr) (string, []any, error) {
 }
 
 func buildComparison(e dql.ComparisonExpr) (string, []any, error) {
+	// null comparison: e.Value == "" means the parser saw the null keyword.
+	// "field = null" → field does NOT exist; "field != null" → field EXISTS.
+	if e.Value == "" {
+		switch e.Op {
+		case "=":
+			return "f.id NOT IN (SELECT file_id FROM fields WHERE key = ?)",
+				[]any{e.Field}, nil
+		case "!=":
+			return "f.id IN (SELECT file_id FROM fields WHERE key = ?)",
+				[]any{e.Field}, nil
+		default:
+			// Other comparisons against null always fail (Dataview semantics).
+			return "0=1", nil, nil
+		}
+	}
+
 	switch e.Op {
 	case "=", "contains":
 		return "f.id IN (SELECT file_id FROM fields WHERE key = ? AND value = ?)",
 			[]any{e.Field, e.Value}, nil
 	case "!=", "!contains":
+		// Exclude files that have this key with this value, but also include
+		// files that don't have the field at all (Dataview semantics: missing
+		// field is null, and null != "anything" is true... but actually in
+		// Dataview, null != "value" is false). We keep the existing behavior
+		// for non-null != comparisons.
 		return "f.id NOT IN (SELECT file_id FROM fields WHERE key = ? AND value = ?)",
 			[]any{e.Field, e.Value}, nil
 	case "<", ">", "<=", ">=":

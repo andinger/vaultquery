@@ -354,6 +354,55 @@ func TestIntegration_WithoutID(t *testing.T) {
 	}
 }
 
+func TestIntegration_WhereFieldNotEqualsNull(t *testing.T) {
+	// Regression test for https://github.com/andinger/vaultquery/issues/2
+	// "WHERE field != null" must exclude entries where the field is missing.
+	_, store := setupTestVault(t)
+
+	// The test vault has 5 files. Only 2 (Kubernetes Clusters) have "kubectl_context".
+	// The other 3 (System, 2x Lead) do not.
+	query, err := dql.Parse(`TABLE kubectl_context WHERE kubectl_context != null`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 2 {
+		t.Errorf("expected 2 results (only entries with kubectl_context), got %d", len(result.Results))
+		for _, r := range result.Results {
+			t.Logf("  %v", r["title"])
+		}
+	}
+}
+
+func TestIntegration_WhereFieldEqualsNull(t *testing.T) {
+	_, store := setupTestVault(t)
+
+	// field = null → only entries where field is missing
+	query, err := dql.Parse(`LIST WHERE kubectl_context = null`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 3 {
+		t.Errorf("expected 3 results (entries without kubectl_context), got %d", len(result.Results))
+		for _, r := range result.Results {
+			t.Logf("  %v", r["title"])
+		}
+	}
+}
+
 func TestIntegration_DottedFieldAccess(t *testing.T) {
 	query, err := dql.Parse("LIST WHERE file.name = 'CLUSTER' SORT file.name ASC")
 	if err != nil {

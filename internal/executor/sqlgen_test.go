@@ -216,6 +216,63 @@ func TestGenerateSQL_NumericComparison(t *testing.T) {
 	}
 }
 
+func TestGenerateSQL_WhereFieldNotEqualsNull(t *testing.T) {
+	// field != null (parser sets Value="" for null) → should check field EXISTS
+	q := &dql.Query{
+		Mode:  "LIST",
+		Where: dql.ComparisonExpr{Field: "server_id", Op: "!=", Value: ""},
+	}
+	sql, args, err := GenerateSQL(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSQL := "SELECT DISTINCT f.id, f.path, f.title FROM files f WHERE f.id IN (SELECT file_id FROM fields WHERE key = ?)"
+	if sql != wantSQL {
+		t.Errorf("got %q, want %q", sql, wantSQL)
+	}
+	if len(args) != 1 || args[0] != "server_id" {
+		t.Errorf("unexpected args: %v", args)
+	}
+}
+
+func TestGenerateSQL_WhereFieldEqualsNull(t *testing.T) {
+	// field = null (parser sets Value="" for null) → should check field NOT EXISTS
+	q := &dql.Query{
+		Mode:  "LIST",
+		Where: dql.ComparisonExpr{Field: "server_id", Op: "=", Value: ""},
+	}
+	sql, args, err := GenerateSQL(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSQL := "SELECT DISTINCT f.id, f.path, f.title FROM files f WHERE f.id NOT IN (SELECT file_id FROM fields WHERE key = ?)"
+	if sql != wantSQL {
+		t.Errorf("got %q, want %q", sql, wantSQL)
+	}
+	if len(args) != 1 || args[0] != "server_id" {
+		t.Errorf("unexpected args: %v", args)
+	}
+}
+
+func TestGenerateSQL_WhereFieldGreaterThanNull(t *testing.T) {
+	// field > null → always false (Dataview semantics)
+	q := &dql.Query{
+		Mode:  "LIST",
+		Where: dql.ComparisonExpr{Field: "priority", Op: ">", Value: ""},
+	}
+	sql, args, err := GenerateSQL(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSQL := "SELECT DISTINCT f.id, f.path, f.title FROM files f WHERE 0=1"
+	if sql != wantSQL {
+		t.Errorf("got %q, want %q", sql, wantSQL)
+	}
+	if len(args) != 0 {
+		t.Errorf("expected no args, got %v", args)
+	}
+}
+
 func TestGenerateSQL_OrExpression(t *testing.T) {
 	q := &dql.Query{
 		Mode: "LIST",
