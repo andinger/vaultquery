@@ -44,12 +44,9 @@ func GenerateSQL(query *dql.Query) (string, []any, error) {
 			whereArgs = append(whereArgs, fromArgs...)
 		}
 	} else if query.From != "" {
-		from := query.From
-		if !strings.HasSuffix(from, "/") {
-			from += "/"
-		}
-		where = append(where, "f.path LIKE ? || '%'")
-		whereArgs = append(whereArgs, from)
+		fromSQL, fromArgs := buildFolderMatch(query.From)
+		where = append(where, fromSQL)
+		whereArgs = append(whereArgs, fromArgs...)
 	}
 
 	// WHERE clause
@@ -163,11 +160,8 @@ func buildExists(e dql.ExistsExpr) (string, []any, error) {
 func buildFromSource(src dql.FromSource) (string, []any, error) {
 	switch s := src.(type) {
 	case dql.FolderSource:
-		from := s.Path
-		if !strings.HasSuffix(from, "/") {
-			from += "/"
-		}
-		return "f.path LIKE ? || '%'", []any{from}, nil
+		sql, args := buildFolderMatch(s.Path)
+		return sql, args, nil
 
 	case dql.TagSource:
 		return "f.id IN (SELECT file_id FROM tags WHERE tag = ?)", []any{s.Tag}, nil
@@ -203,6 +197,34 @@ func buildFromSource(src dql.FromSource) (string, []any, error) {
 	default:
 		return "", nil, fmt.Errorf("unsupported FROM source type: %T", src)
 	}
+}
+
+// buildFolderMatch generates SQL for a folder path, supporting * wildcards.
+// Without wildcards: exact prefix match (existing behavior).
+// With wildcards: * maps to SQL %, with a special case for leading */ to also
+// match root-level folders.
+func buildFolderMatch(path string) (string, []any) {
+	if strings.Contains(path, "*") {
+		// Wildcard mode: convert * to SQL %
+		if !strings.HasSuffix(path, "/") && !strings.HasSuffix(path, "*") {
+			path += "/"
+		}
+		pattern := strings.ReplaceAll(path, "*", "%")
+		if !strings.HasSuffix(pattern, "%") {
+			pattern += "%"
+		}
+		// Leading %/ edge case: also match root-level paths
+		if strings.HasPrefix(pattern, "%/") {
+			rootPattern := pattern[2:] // strip leading "%/"
+			return "(f.path LIKE ? OR f.path LIKE ?)", []any{pattern, rootPattern}
+		}
+		return "f.path LIKE ?", []any{pattern}
+	}
+	// Existing prefix-match behavior
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+	return "f.path LIKE ? || '%'", []any{path}
 }
 
 // CanPushToSQL returns true if the expression can be fully evaluated in SQL.

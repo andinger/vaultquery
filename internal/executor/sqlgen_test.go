@@ -294,3 +294,58 @@ func TestGenerateSQL_OrExpression(t *testing.T) {
 		t.Errorf("expected 4 args, got %v", args)
 	}
 }
+
+func TestGenerateSQL_FromFolderWildcardLeading(t *testing.T) {
+	q := &dql.Query{
+		Mode:       "LIST",
+		FromSource: dql.FolderSource{Path: "*/Kunden"},
+	}
+	sql, args, err := GenerateSQL(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSQL := "SELECT DISTINCT f.id, f.path, f.title FROM files f WHERE (f.path LIKE ? OR f.path LIKE ?)"
+	if sql != wantSQL {
+		t.Errorf("got %q, want %q", sql, wantSQL)
+	}
+	if len(args) != 2 || args[0] != "%/Kunden/%" || args[1] != "Kunden/%" {
+		t.Errorf("unexpected args: %v", args)
+	}
+}
+
+func TestGenerateSQL_FromFolderWildcardMiddle(t *testing.T) {
+	q := &dql.Query{
+		Mode:       "LIST",
+		FromSource: dql.FolderSource{Path: "Clients/*/Projects"},
+	}
+	sql, args, err := GenerateSQL(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSQL := "SELECT DISTINCT f.id, f.path, f.title FROM files f WHERE f.path LIKE ?"
+	if sql != wantSQL {
+		t.Errorf("got %q, want %q", sql, wantSQL)
+	}
+	if len(args) != 1 || args[0] != "Clients/%/Projects/%" {
+		t.Errorf("unexpected args: %v", args)
+	}
+}
+
+func TestGenerateSQL_FromFolderNoWildcard(t *testing.T) {
+	// Regression: non-wildcard paths keep existing prefix-match behavior
+	q := &dql.Query{
+		Mode:       "LIST",
+		FromSource: dql.FolderSource{Path: "Clients"},
+	}
+	sql, args, err := GenerateSQL(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSQL := "SELECT DISTINCT f.id, f.path, f.title FROM files f WHERE f.path LIKE ? || '%'"
+	if sql != wantSQL {
+		t.Errorf("got %q, want %q", sql, wantSQL)
+	}
+	if len(args) != 1 || args[0] != "Clients/" {
+		t.Errorf("unexpected args: %v", args)
+	}
+}

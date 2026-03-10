@@ -104,6 +104,8 @@ vaultquery query 'TABLE x WHERE status != "done"'
 
 ```
 FROM "folder/path"              # Folder
+FROM "*/folder"                 # Wildcard: match folder under any prefix
+FROM "Clients/*/Projects"       # Wildcard: match any intermediate path
 FROM #tag                       # Tag
 FROM [[link]]                   # Backlinks to page
 FROM outgoing([[link]])         # Outgoing links from page

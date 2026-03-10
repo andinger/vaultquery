@@ -403,6 +403,103 @@ func TestIntegration_WhereFieldEqualsNull(t *testing.T) {
 	}
 }
 
+func TestIntegration_FromWildcard(t *testing.T) {
+	vault := newTestVault(t)
+
+	// Create files under different brain prefixes
+	vault.addFile(t, "IA/Kunden/Acme/INFO.md", map[string]any{
+		"type":     "Customer",
+		"customer": "Acme Corp",
+	}, "# Acme Corp\n")
+	vault.addFile(t, "Team/Kunden/Globex/INFO.md", map[string]any{
+		"type":     "Customer",
+		"customer": "Globex Inc",
+	}, "# Globex Inc\n")
+	// Root-level Kunden should also match */Kunden
+	vault.addFile(t, "Kunden/Initech/INFO.md", map[string]any{
+		"type":     "Customer",
+		"customer": "Initech",
+	}, "# Initech\n")
+	// Unrelated folder should not match
+	vault.addFile(t, "Projects/Alpha/INFO.md", map[string]any{
+		"type": "Project",
+	}, "# Alpha Project\n")
+
+	store, err := index.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	fs := indexer.NewRealFS()
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler), nil)
+	if err := idx.Update(vault.root); err != nil {
+		t.Fatal(err)
+	}
+
+	query, err := dql.Parse(`LIST FROM "*/Kunden"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 3 {
+		t.Errorf("expected 3 results from */Kunden (IA + Team + root), got %d", len(result.Results))
+		for _, r := range result.Results {
+			t.Logf("  %v", r["title"])
+		}
+	}
+}
+
+func TestIntegration_FromWildcardMiddle(t *testing.T) {
+	vault := newTestVault(t)
+
+	vault.addFile(t, "Clients/Acme/Projects/Web.md", map[string]any{
+		"type": "Project",
+	}, "# Acme Web\n")
+	vault.addFile(t, "Clients/Globex/Projects/API.md", map[string]any{
+		"type": "Project",
+	}, "# Globex API\n")
+	vault.addFile(t, "Clients/Acme/Notes/Meeting.md", map[string]any{
+		"type": "Note",
+	}, "# Meeting\n")
+
+	store, err := index.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	fs := indexer.NewRealFS()
+	idx := indexer.New(store, fs, slog.New(slog.DiscardHandler), nil)
+	if err := idx.Update(vault.root); err != nil {
+		t.Fatal(err)
+	}
+
+	query, err := dql.Parse(`LIST FROM "Clients/*/Projects"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec := executor.New(store)
+	result, err := exec.Execute(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Results) != 2 {
+		t.Errorf("expected 2 results from Clients/*/Projects, got %d", len(result.Results))
+		for _, r := range result.Results {
+			t.Logf("  %v", r["title"])
+		}
+	}
+}
+
 func TestIntegration_DottedFieldAccess(t *testing.T) {
 	query, err := dql.Parse("LIST WHERE file.name = 'CLUSTER' SORT file.name ASC")
 	if err != nil {
